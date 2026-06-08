@@ -61,7 +61,30 @@
       padding: 0.15rem 0.4rem;
       border-radius: 4px;
       font-size: 0.85rem;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s;
     }
+
+    .tip code:hover { background: rgba(0,0,0,0.12); }
+
+    .tip code .tip-toast {
+      position: absolute;
+      top: -2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .tip code .tip-toast.show { opacity: 1; }
 
     .search-section { margin-bottom: 2rem; }
 
@@ -254,7 +277,7 @@
 
     <div class="tip">
       <strong><span class="icon">&#9881;</span> Tip</strong>
-      Use the favicon directly via <code id="api-example">https://&lt;this-host&gt;/{domain}</code>
+      Use the favicon directly via <code id="api-example" onclick="copyApiUrl(this)">https://&lt;this-host&gt;/{domain}<span class="tip-toast">Copied!</span></code>
       &mdash; click any image to copy its URL.
     </div>
 
@@ -393,6 +416,17 @@
       document.querySelectorAll('#google-sizes .size-btn').forEach((btn) => {
         btn.classList.toggle('active', parseInt(btn.textContent) === size);
       });
+    }
+
+    async function copyApiUrl(code) {
+      const text = code.childNodes[0].textContent;
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const toast = code.querySelector('.tip-toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 1200);
+      } catch {}
     }
 
     async function copyImage(display) {
