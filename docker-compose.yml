@@ -1,10 +1,10 @@
 services:
-  favicon-proxy:
-    build: .
-    container_name: favicon-proxy
+  maflplus-favicon-api:
+    image: ghcr.io/r0gger/maflplus-favicon-api:latest
+    container_name: maflplus-favicon-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3100:3000"
     volumes:
       - favicon-cache:/cache
     environment:
