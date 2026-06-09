@@ -149,6 +149,7 @@
     .results.visible {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: auto;
     }
 
     .card {
@@ -265,7 +266,7 @@
   <div class="container">
     <img src="/logo.png" alt="Favicon Fetcher" class="site-logo">
     <h1>MAFL+ Favicon API</h1>
-    <p class="subtitle">Get the highest resolution favicon for any domain from three public services.</p>
+    <p class="subtitle">Get the highest resolution favicon for any domain from six public services.</p>
 
     <div class="tip">
       <strong><span class="icon">&#9881;</span> Tip</strong>
@@ -327,6 +328,39 @@
         </div>
         <div class="meta" id="yandex-meta"></div>
       </div>
+
+      <!-- Favicon.so -->
+      <div class="card">
+        <h3>Favicon.so</h3>
+        <div class="favicon-display" id="faviconso-display" onclick="copyImage(this)">
+          <div class="spinner" id="faviconso-spinner" style="display:none"></div>
+          <img id="faviconso-img" style="display:none" alt="Favicon.so favicon">
+          <span class="copied-toast">URL copied!</span>
+        </div>
+        <div class="meta" id="faviconso-meta"></div>
+      </div>
+
+      <!-- Vemetric -->
+      <div class="card">
+        <h3>Vemetric.com</h3>
+        <div class="favicon-display" id="vemetric-display" onclick="copyImage(this)">
+          <div class="spinner" id="vemetric-spinner" style="display:none"></div>
+          <img id="vemetric-img" style="display:none" alt="Vemetric favicon">
+          <span class="copied-toast">URL copied!</span>
+        </div>
+        <div class="meta" id="vemetric-meta"></div>
+      </div>
+
+      <!-- Favicon-3j1 -->
+      <div class="card">
+        <h3>Favicon Downloader</h3>
+        <div class="favicon-display" id="favicondev-display" onclick="copyImage(this)">
+          <div class="spinner" id="favicondev-spinner" style="display:none"></div>
+          <img id="favicondev-img" style="display:none" alt="Favicon-3j1 favicon">
+          <span class="copied-toast">URL copied!</span>
+        </div>
+        <div class="meta" id="favicondev-meta"></div>
+      </div>
     </div>
   </div>
 
@@ -361,6 +395,9 @@
       loadGoogle(domain, 32);
       loadDavicon('ddg', `/d/${domain}`, `https://icons.duckduckgo.com/ip3/${domain}.ico`);
       loadFavicon('yandex', `/y/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
+      loadFavicon('faviconso', `/f/${domain}`, `https://favicon.so/api/favicon?url=${domain}`);
+      loadFavicon('vemetric', `/v/${domain}`, `https://favicon.vemetric.com/${domain}`);
+      loadFavicon('favicondev', `/p/${domain}`, `https://favicon-3j1.pages.dev/favicon/${domain}`);
     }
 
     function loadGoogle(domain, size) {
@@ -409,6 +446,7 @@
         btn.classList.toggle('active', parseInt(btn.textContent) === size);
       });
     }
+
 
     async function copyApiUrl() {
       const code = document.getElementById('api-example');

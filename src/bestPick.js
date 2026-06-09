@@ -1,5 +1,5 @@
 const sharp = require('sharp');
-const { fetchGoogle, fetchDuckDuckGo, fetchYandex } = require('./providers');
+const { fetchGoogle, fetchDuckDuckGo, fetchYandex, fetchFaviconSo, fetchVemetric, fetchFaviconDev } = require('./providers');
 const cache = require('./cache');
 
 const TRANSPARENT_1X1_PNG = Buffer.from(
@@ -49,6 +49,9 @@ async function pickBest(domain) {
   const fallbacks = [
     () => fetchWithCache('duckduckgo', domain, null, () => fetchDuckDuckGo(domain)),
     () => fetchWithCache('google', domain, 32, () => fetchGoogle(domain, 32)),
+    () => fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain)),
+    () => fetchWithCache('vemetric', domain, null, () => fetchVemetric(domain)),
+    () => fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain)),
     () => fetchWithCache('yandex', domain, null, () => fetchYandex(domain)),
   ];
 

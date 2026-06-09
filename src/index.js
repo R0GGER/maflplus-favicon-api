@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { fetchGoogle, fetchDuckDuckGo, fetchYandex } = require('./providers');
+const { fetchGoogle, fetchDuckDuckGo, fetchYandex, fetchFaviconSo, fetchVemetric, fetchFaviconDev } = require('./providers');
 const { pickBest, fetchWithCache } = require('./bestPick');
 const cache = require('./cache');
 
@@ -10,6 +10,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const VALID_GOOGLE_SIZES = new Set([16, 32, 64, 128]);
+const VALID_VEMETRIC_FORMATS = new Set(['png', 'jpg', 'webp']);
 const CACHE_CONTROL = 'public, max-age=86400';
 
 function sendFavicon(res, entry) {
@@ -72,6 +73,59 @@ app.get('/y/:domain', async (req, res) => {
     sendFavicon(res, entry);
   } catch (err) {
     console.error('Yandex proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+});
+
+// Favicon.so proxy: /f/:domain
+app.get('/f/:domain', async (req, res) => {
+  const domain = extractDomain(req.params.domain);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+  try {
+    const entry = await fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain));
+    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('Favicon.so proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+});
+
+// Vemetric favicon proxy: /v/:domain
+app.get('/v/:domain', async (req, res) => {
+  const domain = extractDomain(req.params.domain);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+  const size = req.query.size ? parseInt(req.query.size, 10) : null;
+  const format = req.query.format || null;
+
+  if (format && !VALID_VEMETRIC_FORMATS.has(format)) {
+    return res.status(400).json({ error: 'Invalid format. Use png, jpg, or webp.' });
+  }
+
+  try {
+    const cacheSize = size || format || null;
+    const entry = await fetchWithCache('vemetric', domain, cacheSize, () => fetchVemetric(domain, size, format));
+    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('Vemetric proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+});
+
+// Favicon-3j1 proxy: /p/:domain
+app.get('/p/:domain', async (req, res) => {
+  const domain = extractDomain(req.params.domain);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+  try {
+    const entry = await fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain));
+    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('Favicon-3j1 proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
   }
 });

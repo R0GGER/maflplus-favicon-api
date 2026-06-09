@@ -1,18 +1,23 @@
 # MAFL+ Favicon API
 
-A lightweight favicon proxy that fetches favicons from Google, DuckDuckGo, and Yandex. Includes a web UI and a simple API to grab any website's favicon.
+A lightweight favicon proxy that fetches favicons from multiple providers (Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon-3j1). Includes a web UI and a simple API to grab any website's favicon.
 
 ## API
 
 | Endpoint | Description |
 |---|---|
-| `/{domain}` | Best favicon (DuckDuckGo preferred, fallback to Google/Yandex) |
+| `/{domain}` | Best favicon (cascading fallback through all providers) |
 | `/g/16/{domain}` | Google favicon 16px |
 | `/g/32/{domain}` | Google favicon 32px |
 | `/g/64/{domain}` | Google favicon 64px |
 | `/g/128/{domain}` | Google favicon 128px |
 | `/d/{domain}` | DuckDuckGo favicon |
 | `/y/{domain}` | Yandex favicon |
+| `/f/{domain}` | Favicon.so favicon |
+| `/v/{domain}` | Vemetric favicon |
+| `/v/{domain}?size=64` | Vemetric favicon resized |
+| `/v/{domain}?format=webp` | Vemetric favicon in webp/png/jpg |
+| `/p/{domain}` | Favicon-3j1 favicon |
 
 **Example:** `https://your-host/github.com`
 

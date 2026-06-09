@@ -7,6 +7,17 @@ const PROVIDERS = {
     `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`,
   yandex: (domain) =>
     `https://favicon.yandex.net/favicon/${encodeURIComponent(domain)}`,
+  faviconSo: (domain) =>
+    `https://favicon.so/api/favicon?url=${encodeURIComponent(domain)}`,
+  vemetric: (domain, size, format) => {
+    const params = new URLSearchParams();
+    if (size) params.set('size', size);
+    if (format) params.set('format', format);
+    const qs = params.toString();
+    return `https://favicon.vemetric.com/${encodeURIComponent(domain)}${qs ? '?' + qs : ''}`;
+  },
+  faviconDev: (domain) =>
+    `https://favicon-3j1.pages.dev/favicon/${encodeURIComponent(domain)}`,
 };
 
 async function fetchFavicon(url) {
@@ -52,4 +63,22 @@ async function fetchYandex(domain) {
   return result ? { ...result, provider: 'yandex' } : null;
 }
 
-module.exports = { fetchGoogle, fetchDuckDuckGo, fetchYandex };
+async function fetchFaviconSo(domain) {
+  const url = PROVIDERS.faviconSo(domain);
+  const result = await fetchFavicon(url);
+  return result ? { ...result, provider: 'faviconso' } : null;
+}
+
+async function fetchVemetric(domain, size, format) {
+  const url = PROVIDERS.vemetric(domain, size, format);
+  const result = await fetchFavicon(url);
+  return result ? { ...result, provider: 'vemetric' } : null;
+}
+
+async function fetchFaviconDev(domain) {
+  const url = PROVIDERS.faviconDev(domain);
+  const result = await fetchFavicon(url);
+  return result ? { ...result, provider: 'favicondev' } : null;
+}
+
+module.exports = { fetchGoogle, fetchDuckDuckGo, fetchYandex, fetchFaviconSo, fetchVemetric, fetchFaviconDev };
