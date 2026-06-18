@@ -57,6 +57,7 @@ services:
       - DISK_CACHE_TTL=86400
       - UPSTREAM_TIMEOUT=5000
       - LOGODEV_TOKEN=
+      #- DEFAULT_PROVIDER=scraper
 
 volumes:
   favicon-cache:
@@ -89,3 +90,4 @@ Then use the host path in your `docker-compose.yml`:
 | `DISK_CACHE_TTL` | `86400` | Disk cache TTL (seconds) |
 | `UPSTREAM_TIMEOUT` | `5000` | Upstream request timeout (ms) |
 | `LOGODEV_TOKEN` | _(unset)_ | Optional [logo.dev](https://www.logo.dev/) publishable key. When unset, `/l/{domain}` returns 503 and the logo.dev card is hidden in the UI. |
+| `DEFAULT_PROVIDER` | _(unset)_ | Optional default provider for `/{domain}` requests. The chosen provider is tried first; remaining providers are used as fallback. Valid values: `scraper`, `google`, `googlev2`, `duckduckgo`, `yandex`, `faviconso`, `vemetric`, `favicondev`, `faviconkit`, `logodev`, `selfhst`. Note: `logodev` requires `LOGODEV_TOKEN`. |

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Provider configuration endpoint** (`/providers`)
   - Reports which optional providers are enabled (currently `logoDev`) and exposes the publishable logo.dev token to the UI for direct image references.
   - Reports `upstreamIpv4: true` when upstream fetches are forced over IPv4 (datacenter/VPS compatibility).
+  - Reports `defaultProvider` when `DEFAULT_PROVIDER` is configured.
 - **`/{domain}/json` endpoint expansion**
   - Now includes Google v2, Faviconkit (sized variants), Vemetric (default + sized + format variants), logo.dev, HTML scraper and selfhst entries (with `color`/`light`/`dark` variants).
   - Each endpoint exposes both a `proxy` URL (this server) and a `source` URL (upstream provider) for transparency.
@@ -51,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`upstreamFetch` module** (`src/upstreamFetch.js`)
   - Shared IPv4-only undici `fetch` wrapper with an optional HTTP/1.1 dispatcher (`allowH2: false`) for scraper retries against origins that reject HTTP/2 from datacenter IPs.
 - **Configuration**
+  - New `DEFAULT_PROVIDER` environment variable to set the default (first-tried) provider for `/{domain}` requests. Valid values: `scraper`, `google`, `googlev2`, `duckduckgo`, `yandex`, `faviconso`, `vemetric`, `favicondev`, `faviconkit`, `logodev`, `selfhst`. Remaining providers are used as fallback in the standard order. Logs a warning at startup when an invalid value is supplied.
   - New `LOGODEV_TOKEN` environment variable, documented in `README.md`, `.env.example` and `docker-compose.yml`.
 - **Documentation**
   - `README.md` rewritten to cover all new endpoints, the size matrix per provider, the selfhst lookup, the `/providers` endpoint, and the `LOGODEV_TOKEN` variable.

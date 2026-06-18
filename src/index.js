@@ -274,6 +274,7 @@ app.get('/providers', (req, res) => {
   res.json({
     logoDev: !!process.env.LOGODEV_TOKEN,
     logoDevToken: process.env.LOGODEV_TOKEN || null,
+    defaultProvider: (process.env.DEFAULT_PROVIDER || '').trim().toLowerCase() || null,
     upstreamIpv4: true,
   });
 });

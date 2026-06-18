@@ -9,9 +9,32 @@ const {
   fetchFaviconDev,
   fetchFaviconkit,
   fetchLogoDev,
+  fetchSelfhst,
   fetchScraper,
 } = require('./providers');
 const cache = require('./cache');
+
+const VALID_DEFAULT_PROVIDERS = new Set([
+  'scraper', 'google', 'googlev2', 'duckduckgo', 'yandex',
+  'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'logodev', 'selfhst',
+]);
+
+const DEFAULT_PROVIDER = (() => {
+  const val = (process.env.DEFAULT_PROVIDER || '').trim().toLowerCase();
+  if (!val) return null;
+  if (!VALID_DEFAULT_PROVIDERS.has(val)) {
+    console.warn(
+      `DEFAULT_PROVIDER="${process.env.DEFAULT_PROVIDER}" is not valid. ` +
+      `Valid values: ${[...VALID_DEFAULT_PROVIDERS].join(', ')}. Falling back to default order.`
+    );
+    return null;
+  }
+  if (val === 'logodev' && !process.env.LOGODEV_TOKEN) {
+    console.warn('DEFAULT_PROVIDER="logodev" requires LOGODEV_TOKEN to be set. Falling back to default order.');
+    return null;
+  }
+  return val;
+})();
 
 const TRANSPARENT_1X1_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' +
@@ -53,27 +76,53 @@ function scoreCandidate(info) {
   return score;
 }
 
+function serviceSlugFromDomain(domain) {
+  const first = domain.toLowerCase().split('.')[0];
+  const slug = first.replace(/[^a-z0-9._-]/g, '');
+  return /^[a-z0-9][a-z0-9._-]*$/.test(slug) ? slug : null;
+}
+
+function buildFallbackFetchers(domain) {
+  const all = {
+    scraper:    () => fetchWithCache('scraper', domain, null, () => fetchScraper(domain)),
+    googlev2:   () => fetchWithCache('googlev2', domain, 128, () => fetchGoogleV2(domain, 128)),
+    duckduckgo: () => fetchWithCache('duckduckgo', domain, null, () => fetchDuckDuckGo(domain)),
+    google:     () => fetchWithCache('google', domain, 32, () => fetchGoogle(domain, 32)),
+    faviconkit: () => fetchWithCache('faviconkit', domain, 128, () => fetchFaviconkit(domain, 128)),
+    faviconso:  () => fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain)),
+    vemetric:   () => fetchWithCache('vemetric', domain, null, () => fetchVemetric(domain)),
+    favicondev: () => fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain)),
+    yandex:     () => fetchWithCache('yandex', domain, null, () => fetchYandex(domain)),
+  };
+
+  if (process.env.LOGODEV_TOKEN) {
+    all.logodev = () => fetchWithCache('logodev', domain, null, () => fetchLogoDev(domain));
+  }
+
+  const slug = serviceSlugFromDomain(domain);
+  if (slug) {
+    all.selfhst = () => fetchWithCache('selfhst', slug, null, () => fetchSelfhst(slug));
+  }
+
+  const defaultOrder = [
+    'scraper', 'googlev2', 'duckduckgo',
+    ...(process.env.LOGODEV_TOKEN ? ['logodev'] : []),
+    'google', 'faviconkit', 'faviconso', 'vemetric', 'favicondev', 'yandex',
+  ];
+
+  if (DEFAULT_PROVIDER && all[DEFAULT_PROVIDER]) {
+    const rest = defaultOrder.filter((k) => k !== DEFAULT_PROVIDER);
+    return [DEFAULT_PROVIDER, ...rest].map((k) => all[k]).filter(Boolean);
+  }
+
+  return defaultOrder.map((k) => all[k]).filter(Boolean);
+}
+
 async function pickBest(domain) {
   const cached = await cache.get('best', domain, 32);
   if (cached) return cached;
 
-  const fallbacks = [
-    () => fetchWithCache('scraper', domain, null, () => fetchScraper(domain)),
-    () => fetchWithCache('googlev2', domain, 128, () => fetchGoogleV2(domain, 128)),
-    () => fetchWithCache('duckduckgo', domain, null, () => fetchDuckDuckGo(domain)),
-    () => fetchWithCache('google', domain, 32, () => fetchGoogle(domain, 32)),
-    () => fetchWithCache('faviconkit', domain, 128, () => fetchFaviconkit(domain, 128)),
-    () => fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain)),
-    () => fetchWithCache('vemetric', domain, null, () => fetchVemetric(domain)),
-    () => fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain)),
-    () => fetchWithCache('yandex', domain, null, () => fetchYandex(domain)),
-  ];
-
-  if (process.env.LOGODEV_TOKEN) {
-    fallbacks.splice(2, 0, () =>
-      fetchWithCache('logodev', domain, null, () => fetchLogoDev(domain))
-    );
-  }
+  const fallbacks = buildFallbackFetchers(domain);
 
   for (const fetcher of fallbacks) {
     const result = await fetcher();
