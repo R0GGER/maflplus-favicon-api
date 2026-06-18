@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Quick-link suggestions extended with self-hosted service examples (`firefox`, `immich`, `jellyfin`).
   - Front-end fetches `/providers` on load to conditionally show or hide the logo.dev card.
   - Favicon preview images append a cache-busting query parameter so browser cache does not show stale scraper results after redeploy.
+  - HTML Scraper card shows the **proxy URL** (`/s/{domain}`) under the icon — the URL to use in apps — not the scraped site's homepage.
 - **`upstreamFetch` module** (`src/upstreamFetch.js`)
   - Shared IPv4-only undici `fetch` wrapper with an optional HTTP/1.1 dispatcher (`allowH2: false`) for scraper retries against origins that reject HTTP/2 from datacenter IPs.
 - **Configuration**
@@ -54,12 +55,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation**
   - `README.md` rewritten to cover all new endpoints, the size matrix per provider, the selfhst lookup, the `/providers` endpoint, and the `LOGODEV_TOKEN` variable.
   - Endpoint table consolidated to use parameterised paths (e.g. `/g/{size}/{domain}`) instead of one row per size.
+  - Documented scraper cache bypass: `/s/{domain}?refresh=1` (alias `?nocache=1`).
+- **Response headers**
+  - Favicon responses may include `X-Favicon-Url` with the upstream asset URL when known (e.g. after HTML scraper fetch).
 
 ### Changed
 
-- `docker-compose.yml` defaults back to the published image `ghcr.io/r0gger/maflplus-favicon-api:latest` (the local `build: .` line is kept commented out for development).
+- `docker-compose.yml` supports local development via `build: .` (comment out for the published `ghcr.io/r0gger/maflplus-favicon-api:latest` image).
 - Best-pick (`/{domain}`) now scrapes the source site first, falling back to network providers only when scraping does not yield a usable icon — typically improving icon quality and resilience for self-hosted/private domains.
 - Node process sets `dns.setDefaultResultOrder('ipv4first')` at startup; Docker image passes `--dns-result-order=ipv4first` for additional IPv4 preference on upstream DNS resolution.
+- **`/{domain}/json` scraper `source` field** — reports the cached upstream asset URL when available, instead of always `https://{domain}/`.
+- Static `index.html` is served with `Cache-Control: no-cache` so UI fixes apply immediately after redeploy without a hard browser refresh.
 
 ### Fixed
 
@@ -72,12 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTML scraper variant probing** — when probing `NxN` CDN paths, stops before a sharp size jump (e.g. Reddit serves a full-body marketing PNG at 512×512 while 64–192 are the actual logo favicons).
 - **HTML scraper mask-icon exclusion** — ignores Safari `rel="mask-icon"` / `safari-pinned-tab.svg` assets; these are monochrome pinned-tab silhouettes, not display favicons (e.g. `proton.me` showed a solid black “P” instead of the purple gradient logo).
 - **HTML scraper manifest monochrome icons** — skips web-app-manifest icons with `purpose: monochrome` (and known monochrome URL patterns); sites like YouTube expose a white logo at 512×512 alongside the red favicon set.
+- **Web UI HTML Scraper URL** — card no longer showed `https://{domain}/` under the icon; it now always displays and copies the proxy URL (`{origin}/s/{domain}`), matching how other providers expose usable API URLs.
 
 ### Internal
 
 - `services.txt` added to `.gitignore` (local notes file).
 - `cache.del()` added for per-entry cache invalidation (used by `/s/{domain}?refresh=1`).
 - HTML scraper upstream requests routed through `src/upstreamFetch.js` instead of global `fetch`.
+- Disk cache metadata now persists the upstream `url` for scraper entries (used by `X-Favicon-Url` and `/{domain}/json`).
 
 ---
 

@@ -27,7 +27,15 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 app.set('trust proxy', true);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('.html')) {
+        res.set('Cache-Control', 'no-cache');
+      }
+    },
+  })
+);
 
 const VALID_GOOGLE_SIZES = new Set([16, 32, 64, 128]);
 const VALID_GOOGLEV2_SIZES = new Set([16, 32, 64, 128, 256]);
@@ -41,6 +49,7 @@ function sendFavicon(res, entry) {
   res.set('Content-Type', entry.contentType);
   res.set('Cache-Control', CACHE_CONTROL);
   res.set('X-Favicon-Source', entry.provider);
+  if (entry.url) res.set('X-Favicon-Url', entry.url);
   res.send(entry.buffer);
 }
 
@@ -270,12 +279,13 @@ app.get('/providers', (req, res) => {
 });
 
 // JSON list of all favicon endpoint URLs for a domain: /:domain/json
-app.get('/:domain/json', (req, res) => {
+app.get('/:domain/json', async (req, res) => {
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
   const host = `${req.protocol}://${req.get('host')}`;
   const encoded = encodeURIComponent(domain);
+  const scraperCached = await cache.get('scraper', domain, null);
 
   const googleSizes = [16, 32, 64, 128];
   const googleV2Sizes = [16, 32, 64, 128, 256];
@@ -391,7 +401,7 @@ app.get('/:domain/json', (req, res) => {
       logodev,
       scraper: {
         proxy: `${host}/s/${encoded}`,
-        source: `https://${domain}/`,
+        source: scraperCached?.url || null,
       },
       selfhst,
     },

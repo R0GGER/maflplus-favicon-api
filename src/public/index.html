@@ -849,7 +849,7 @@
       setActiveSize('google-sizes', 128);
       setActiveSize('faviconkit-sizes', 128);
 
-      loadFavicon('scraper', `/s/${domain}`, `https://${domain}/`);
+      loadScraperFavicon(domain);
       loadGoogle(domain, 128);
       loadDavicon('ddg', `/d/${domain}`, `https://icons.duckduckgo.com/ip3/${domain}.ico`);
       loadFavicon('yandex', `/y/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
@@ -1030,6 +1030,32 @@
       );
     }
 
+    function showFaviconMeta(id, imgEl, proxyUrl, sourceUrl) {
+      const img = document.getElementById(`${id}-img`);
+      const meta = document.getElementById(`${id}-meta`);
+      const fullProxyUrl = `${location.origin}${proxyUrl}`;
+      img.closest('.favicon-display').dataset.proxyUrl = fullProxyUrl;
+
+      // HTML scraper: always show/copy the proxy URL, not the upstream site or asset URL.
+      const displayUrl = id === 'scraper' ? fullProxyUrl : sourceUrl;
+      const copyLabel = id === 'scraper' ? 'Copy proxy URL' : 'Copy source URL';
+      const escapedUrl = escapeHtml(displayUrl);
+      meta.innerHTML =
+        `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
+        `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
+        `<button class="copy-btn" type="button" title="${copyLabel}" aria-label="${copyLabel}">${COPY_ICON_SVG}</button>`;
+      const copyBtn = meta.querySelector('.copy-btn');
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        copySource(copyBtn, displayUrl);
+      });
+    }
+
+    function loadScraperFavicon(domain) {
+      loadFavicon('scraper', `/s/${domain}`, `${location.origin}/s/${domain}`);
+    }
+
     function loadFavicon(id, proxyUrl, sourceUrl) {
       const img = document.getElementById(`${id}-img`);
       const spinner = document.getElementById(`${id}-spinner`);
@@ -1047,20 +1073,7 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        const fullProxyUrl = `${location.origin}${proxyUrl}`;
-        img.closest('.favicon-display').dataset.proxyUrl = fullProxyUrl;
-
-        const escapedUrl = escapeHtml(sourceUrl);
-        meta.innerHTML =
-          `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
-          `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-          `<button class="copy-btn" type="button" title="Copy source URL" aria-label="Copy source URL">${COPY_ICON_SVG}</button>`;
-        const copyBtn = meta.querySelector('.copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          copySource(copyBtn, sourceUrl);
-        });
+        showFaviconMeta(id, imgEl, proxyUrl, sourceUrl);
       };
       imgEl.onerror = () => {
         spinner.style.display = 'none';

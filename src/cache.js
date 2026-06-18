@@ -57,6 +57,7 @@ async function get(provider, domain, size) {
       contentType: meta.contentType || 'image/png',
       provider: meta.provider || provider,
     };
+    if (meta.url) entry.url = meta.url;
 
     memoryCache.set(key, entry);
     return entry;
@@ -73,6 +74,7 @@ async function set(provider, domain, size, entry) {
   try {
     await ensureCacheDir();
     const meta = { contentType: entry.contentType, provider: entry.provider };
+    if (entry.url) meta.url = entry.url;
     await Promise.all([
       fs.writeFile(diskPath(key), entry.buffer),
       fs.writeFile(metaPath(key), JSON.stringify(meta)),
