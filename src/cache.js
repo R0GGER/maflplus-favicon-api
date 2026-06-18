@@ -82,4 +82,11 @@ async function set(provider, domain, size, entry) {
   }
 }
 
-module.exports = { get, set };
+async function del(provider, domain, size) {
+  const key = cacheKey(provider, domain, size);
+  memoryCache.delete(key);
+  await fs.unlink(diskPath(key)).catch(() => {});
+  await fs.unlink(metaPath(key)).catch(() => {});
+}
+
+module.exports = { get, set, del };

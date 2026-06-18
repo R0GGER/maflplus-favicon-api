@@ -1,7 +1,225 @@
 const cheerio = require('cheerio');
 const sharp = require('sharp');
+const { upstreamFetch, ipv4Dispatcher, ipv4Http1Dispatcher } = require('./upstreamFetch');
 
 const UPSTREAM_TIMEOUT = parseInt(process.env.UPSTREAM_TIMEOUT || '5000', 10);
+
+const SCRAPER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+const STANDARD_FALLBACKS = [
+  '/favicon.ico',
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png',
+];
+
+// CDN entry points for domains whose homepage HTML is blocked from datacenter IPs.
+const STATIC_CDN_HINTS = {
+  'reddit.com': 'https://www.redditstatic.com/shreddit/assets/favicon/64x64.png',
+  'www.reddit.com': 'https://www.redditstatic.com/shreddit/assets/favicon/64x64.png',
+};
+
+const HTML_MIN_BYTES = 256;
+
+function scraperDocumentHeaders(referer, dest = 'document') {
+  const headers = {
+    'User-Agent': SCRAPER_USER_AGENT,
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Fetch-Dest': dest,
+    'Sec-Fetch-Mode': dest === 'document' ? 'navigate' : 'cors',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': dest === 'document' ? '?1' : undefined,
+  };
+  if (referer) {
+    headers.Referer = referer;
+    headers['Sec-Fetch-Site'] = 'same-origin';
+  }
+  for (const key of Object.keys(headers)) {
+    if (headers[key] === undefined) delete headers[key];
+  }
+  return headers;
+}
+
+function scraperImageHeaders(referer, url) {
+  const headers = {
+    'User-Agent': SCRAPER_USER_AGENT,
+    Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Fetch-Dest': 'image',
+    'Sec-Fetch-Mode': 'no-cors',
+  };
+  if (referer) {
+    headers.Referer = referer;
+    try {
+      const sameOrigin = new URL(referer).origin === new URL(url).origin;
+      headers['Sec-Fetch-Site'] = sameOrigin ? 'same-origin' : 'cross-site';
+      if (!sameOrigin) headers.Origin = new URL(referer).origin;
+    } catch {
+      headers['Sec-Fetch-Site'] = 'cross-site';
+    }
+  }
+  return headers;
+}
+
+async function fetchUpstreamRaw(url, { redirect = false } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
+
+  try {
+    const init = { signal: controller.signal };
+    if (redirect) init.redirect = 'follow';
+    const res = await upstreamFetch(url, init);
+
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get('content-type') || 'image/png';
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    if (buffer.length === 0) return null;
+
+    return { buffer, contentType, url };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchScraperAsset(url, referer) {
+  // Bare upstreamFetch first — required on VPS/datacenter hosts where extra headers break CDNs.
+  const bare = await fetchUpstreamRaw(url);
+  if (bare) return bare;
+
+  const minimal = {
+    'User-Agent': SCRAPER_USER_AGENT,
+    Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+  };
+  if (referer) minimal.Referer = referer;
+
+  const result = await fetchFavicon(url, scraperImageHeaders(referer, url));
+  if (result) return result;
+
+  return fetchFavicon(url, minimal);
+}
+
+function isDisplayFaviconCandidate(candidate) {
+  const href = candidate.href.toLowerCase();
+  // Safari pinned-tab SVGs are monochrome mask icons, not UI favicons.
+  if (href.includes('safari-pinned-tab') || href.includes('mask-icon')) return false;
+  // PWA manifest monochrome icons (e.g. YouTube white logo for adaptive UI).
+  if (href.includes('/monochrome/') || /(?:^|[/_-])white(?:[_\-./]|$)/i.test(href)) return false;
+  return true;
+}
+
+function isMonochromeManifestIcon(icon) {
+  const purpose = String(icon.purpose || 'any')
+    .toLowerCase()
+    .split(/\s+/);
+  if (purpose.includes('monochrome')) return true;
+  const src = String(icon.src || '').toLowerCase();
+  return src.includes('/monochrome/') || /(?:^|[/_-])white(?:[_\-./]|$)/i.test(src);
+}
+
+function dedupeCandidates(candidates) {
+  const seen = new Set();
+  const unique = [];
+  for (const c of candidates) {
+    if (!isDisplayFaviconCandidate(c)) continue;
+    if (!seen.has(c.href)) {
+      seen.add(c.href);
+      unique.push(c);
+    }
+  }
+  return unique;
+}
+
+// Stop probing larger NxN variants when pixel size jumps too sharply — some CDNs
+// host unrelated marketing art at 512x512 while 64–192 are the actual favicon set
+// (e.g. redditstatic.com/shreddit/assets/favicon/).
+const MAX_FAVICON_SIZE_JUMP = 2.5;
+
+function faviconVariantGroupKey(href) {
+  const m = href.match(/^(.*\/)(\d+)x\2(\.(?:png|webp|jpe?g))(\?.*)?$/i);
+  if (!m) return null;
+  return `${m[1]}${m[3]}${m[4] || ''}`;
+}
+
+function candidateDeclaredSize(candidate) {
+  return parseSizesAttr(candidate.sizes) || 0;
+}
+
+function rankCandidates(candidates) {
+  return dedupeCandidates(candidates)
+    .map((c) => ({ ...c, declaredSize: parseSizesAttr(c.sizes) }))
+    .sort((a, b) => {
+      if (b.declaredSize !== a.declaredSize) return b.declaredSize - a.declaredSize;
+      return formatScore(b.type) - formatScore(a.type);
+    });
+}
+
+async function probeScraperCandidates(candidates, referer, limit = 16) {
+  const slice = candidates.slice(0, limit);
+  const variantGroups = new Map();
+  const loose = [];
+
+  for (const candidate of slice) {
+    const key = faviconVariantGroupKey(candidate.href);
+    if (key) {
+      if (!variantGroups.has(key)) variantGroups.set(key, []);
+      variantGroups.get(key).push(candidate);
+    } else {
+      loose.push(candidate);
+    }
+  }
+
+  let best = null;
+  let bestScore = -1;
+
+  function updateBest(result, width, format) {
+    const score = width * 100 + formatScore(format);
+    if (score > bestScore) {
+      bestScore = score;
+      best = { ...result, provider: 'scraper' };
+    }
+  }
+
+  async function probeOne(candidate) {
+    const result = await fetchScraperAsset(candidate.href, referer);
+    if (!result) return null;
+
+    try {
+      const meta = await sharp(result.buffer).metadata();
+      const width = Math.min(meta.width || 0, meta.height || 0);
+      const format = meta.format || '';
+      if (width <= 0) return null;
+      return { result, width, format };
+    } catch {
+      return null;
+    }
+  }
+
+  for (const group of variantGroups.values()) {
+    const sorted = [...group].sort(
+      (a, b) => candidateDeclaredSize(a) - candidateDeclaredSize(b) || a.href.localeCompare(b.href)
+    );
+    let lastWidth = 0;
+    for (const candidate of sorted) {
+      const hit = await probeOne(candidate);
+      if (!hit) continue;
+      if (lastWidth > 0 && hit.width > lastWidth * MAX_FAVICON_SIZE_JUMP) break;
+      lastWidth = hit.width;
+      updateBest(hit.result, hit.width, hit.format);
+    }
+  }
+
+  for (const candidate of loose) {
+    const hit = await probeOne(candidate);
+    if (hit) updateBest(hit.result, hit.width, hit.format);
+  }
+
+  return best;
+}
 
 const PROVIDERS = {
   google: (domain, size = 32) =>
@@ -33,14 +251,14 @@ const PROVIDERS = {
   },
 };
 
-async function fetchFavicon(url) {
+async function fetchFavicon(url, requestHeaders) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
 
   try {
-    const res = await fetch(url, {
+    const res = await upstreamFetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'FaviconProxy/1.0' },
+      headers: requestHeaders || { 'User-Agent': 'FaviconProxy/1.0' },
     });
 
     if (!res.ok) return null;
@@ -169,19 +387,22 @@ function expandSizedVariants(href) {
   return out;
 }
 
-async function fetchManifestIcons(manifestUrl, baseUrl) {
+async function fetchManifestIcons(manifestUrl, referer) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
   try {
-    const res = await fetch(manifestUrl, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'FaviconProxy/1.0' },
-    });
+    let res = await upstreamFetch(manifestUrl, { signal: controller.signal });
+    if (!res.ok) {
+      res = await upstreamFetch(manifestUrl, {
+        signal: controller.signal,
+        headers: scraperDocumentHeaders(referer, 'manifest'),
+      });
+    }
     if (!res.ok) return [];
     const json = await res.json();
     if (!json || !Array.isArray(json.icons)) return [];
     return json.icons
-      .filter((icon) => icon && icon.src)
+      .filter((icon) => icon && icon.src && !isMonochromeManifestIcon(icon))
       .map((icon) => ({
         href: new URL(icon.src, manifestUrl).toString(),
         sizes: icon.sizes || '',
@@ -194,81 +415,178 @@ async function fetchManifestIcons(manifestUrl, baseUrl) {
   }
 }
 
-async function fetchScraper(domain) {
-  const baseUrl = `https://${domain}/`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
+function pageUrlsForDomain(domain) {
+  const urls = [`https://${domain}/`];
+  if (!domain.startsWith('www.')) urls.push(`https://www.${domain}/`);
+  return urls;
+}
 
-  let html;
-  let finalBaseUrl = baseUrl;
-  try {
-    const res = await fetch(baseUrl, {
-      signal: controller.signal,
+function staticHintCandidates(domain) {
+  const lower = domain.toLowerCase();
+  const bare = lower.replace(/^www\./, '');
+  const href = STATIC_CDN_HINTS[lower] || STATIC_CDN_HINTS[bare];
+  if (!href) return [];
+  return [{ href, sizes: '64x64', type: 'image/png' }];
+}
+
+async function fetchScraperPage(domain) {
+  const baseUrl = `https://${domain}/`;
+  const attempts = [
+    { label: 'bare-h2', dispatcher: ipv4Dispatcher, headers: null },
+    { label: 'bare-h1', dispatcher: ipv4Http1Dispatcher, headers: null },
+    {
+      label: 'curl-h1',
+      dispatcher: ipv4Http1Dispatcher,
+      headers: { 'User-Agent': 'curl/8.7.1', Accept: 'text/html,*/*' },
+    },
+    {
+      label: 'chrome-h1',
+      dispatcher: ipv4Http1Dispatcher,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; FaviconProxy/1.0; +https://github.com/R0GGER/maflplus-favicon-api)',
-        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': SCRAPER_USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
-      redirect: 'follow',
-    });
-    if (!res.ok) {
-      html = null;
-    } else {
-      finalBaseUrl = res.url || baseUrl;
-      html = await res.text();
+    },
+    {
+      label: 'chrome-doc-h1',
+      dispatcher: ipv4Http1Dispatcher,
+      headers: (url) => scraperDocumentHeaders(url),
+    },
+  ];
+
+  for (const pageUrl of pageUrlsForDomain(domain)) {
+    for (const attempt of attempts) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
+      try {
+        const init = {
+          signal: controller.signal,
+          redirect: 'follow',
+          dispatcher: attempt.dispatcher,
+        };
+        if (attempt.headers) {
+          init.headers =
+            typeof attempt.headers === 'function' ? attempt.headers(pageUrl) : attempt.headers;
+        }
+        const res = await upstreamFetch(pageUrl, init);
+        if (!res.ok) continue;
+        const html = await res.text();
+        if (html.length >= HTML_MIN_BYTES) {
+          return {
+            html,
+            finalBaseUrl: res.url || pageUrl,
+            htmlFetchMethod: `${attempt.label} ${pageUrl}`,
+          };
+        }
+      } catch {
+        /* try next */
+      } finally {
+        clearTimeout(timer);
+      }
     }
-  } catch {
-    html = null;
-  } finally {
-    clearTimeout(timer);
   }
 
+  return { html: null, finalBaseUrl: baseUrl, htmlFetchMethod: null };
+}
+
+// Some hosts (Reddit SSR from datacenter IPs) omit <link rel="icon"> but embed
+// favicon URLs in inline JSON/scripts — scan raw HTML as a fallback.
+function extractEmbeddedIconUrls(html, resolveBase) {
   const candidates = [];
+  const seen = new Set();
+
+  function add(href, sizes = '', type = '') {
+    try {
+      const absolute = new URL(href, resolveBase).toString();
+      if (seen.has(absolute)) return;
+      seen.add(absolute);
+      candidates.push({ href: absolute, sizes, type });
+    } catch {
+      /* ignore invalid URLs */
+    }
+  }
+
+  const absRe =
+    /https?:\/\/[^\s"'<>)]+\.(?:png|webp|jpe?g|ico|svg)(?:\?[^\s"'<>)]*)?/gi;
+  for (const match of html.matchAll(absRe)) {
+    const href = match[0];
+    if (/favicon|apple-touch-icon|fluid-icon|\/icon/i.test(href)) {
+      add(href);
+    }
+  }
+
+  const nxnRe = /["']([^"']*(?:favicon|icon|assets)[^"']*\d+x\d+\.(?:png|webp|jpe?g))(?:\?[^"']*)?["']/gi;
+  for (const match of html.matchAll(nxnRe)) {
+    add(match[1]);
+  }
+
+  return candidates;
+}
+
+function parseIconCandidatesFromHtml(html, finalBaseUrl) {
+  const linkCandidates = [];
+  const $ = cheerio.load(html);
+  const baseHref = $('base[href]').attr('href');
+  const resolveBase = baseHref
+    ? new URL(baseHref, finalBaseUrl).toString()
+    : finalBaseUrl;
+
+  $('link[rel]').each((_, el) => {
+    const rel = ($(el).attr('rel') || '').toLowerCase();
+    const href = $(el).attr('href');
+    if (!href) return;
+
+    const relTokens = rel.split(/\s+/);
+    const isIcon = relTokens.some((r) =>
+      [
+        'icon',
+        'shortcut',
+        'apple-touch-icon',
+        'apple-touch-icon-precomposed',
+        'fluid-icon',
+      ].includes(r)
+    );
+    if (!isIcon) return;
+
+    try {
+      linkCandidates.push({
+        href: new URL(href, resolveBase).toString(),
+        sizes: $(el).attr('sizes') || '',
+        type: $(el).attr('type') || '',
+      });
+    } catch {
+      /* ignore invalid URLs */
+    }
+  });
+
+  const embeddedCandidates = extractEmbeddedIconUrls(html, resolveBase);
+
+  return {
+    primaryCandidates: [...linkCandidates, ...embeddedCandidates],
+    resolveBase,
+    linkCount: linkCandidates.length,
+    embeddedCount: embeddedCandidates.length,
+  };
+}
+
+async function buildScraperCandidates(domain, html, finalBaseUrl) {
+  const baseUrl = `https://${domain}/`;
+  const primaryCandidates = [];
+  const fallbackCandidates = [];
 
   if (html) {
     try {
+      const parsed = parseIconCandidatesFromHtml(html, finalBaseUrl);
+      primaryCandidates.push(...parsed.primaryCandidates);
+
       const $ = cheerio.load(html);
-      const baseHref = $('base[href]').attr('href');
-      const resolveBase = baseHref
-        ? new URL(baseHref, finalBaseUrl).toString()
-        : finalBaseUrl;
-
-      $('link[rel]').each((_, el) => {
-        const rel = ($(el).attr('rel') || '').toLowerCase();
-        const href = $(el).attr('href');
-        if (!href) return;
-
-        const relTokens = rel.split(/\s+/);
-        const isIcon = relTokens.some((r) =>
-          [
-            'icon',
-            'shortcut',
-            'apple-touch-icon',
-            'apple-touch-icon-precomposed',
-            'mask-icon',
-            'fluid-icon',
-          ].includes(r)
-        );
-        if (!isIcon) return;
-
-        try {
-          const absolute = new URL(href, resolveBase).toString();
-          candidates.push({
-            href: absolute,
-            sizes: $(el).attr('sizes') || '',
-            type: $(el).attr('type') || '',
-          });
-        } catch {
-          /* ignore invalid URLs */
-        }
-      });
-
       const manifestHref = $('link[rel="manifest"]').attr('href');
       if (manifestHref) {
         try {
+          const resolveBase = parsed.resolveBase;
           const manifestUrl = new URL(manifestHref, resolveBase).toString();
-          const manifestIcons = await fetchManifestIcons(manifestUrl, resolveBase);
-          candidates.push(...manifestIcons);
+          const manifestIcons = await fetchManifestIcons(manifestUrl, finalBaseUrl);
+          primaryCandidates.push(...manifestIcons);
         } catch {
           /* ignore invalid manifest URL */
         }
@@ -278,13 +596,13 @@ async function fetchScraper(domain) {
     }
   }
 
-  for (const fallback of [
-    '/favicon.ico',
-    '/apple-touch-icon.png',
-    '/apple-touch-icon-precomposed.png',
-  ]) {
+  if (primaryCandidates.length === 0) {
+    primaryCandidates.push(...staticHintCandidates(domain));
+  }
+
+  for (const fallback of STANDARD_FALLBACKS) {
     try {
-      candidates.push({
+      fallbackCandidates.push({
         href: new URL(fallback, baseUrl).toString(),
         sizes: '',
         type: '',
@@ -294,60 +612,26 @@ async function fetchScraper(domain) {
     }
   }
 
-  // Expand any NxN.ext URLs into larger size variants on the same CDN path.
   const variantCandidates = [];
-  for (const c of candidates) {
+  for (const c of primaryCandidates) {
     variantCandidates.push(...expandSizedVariants(c.href));
   }
-  candidates.push(...variantCandidates);
+  primaryCandidates.push(...variantCandidates);
 
-  // Deduplicate by URL while preserving order.
-  const seen = new Set();
-  const unique = [];
-  for (const c of candidates) {
-    if (!seen.has(c.href)) {
-      seen.add(c.href);
-      unique.push(c);
-    }
-  }
+  return {
+    rankedPrimary: rankCandidates(primaryCandidates),
+    rankedFallback: rankCandidates(fallbackCandidates),
+  };
+}
 
-  // Score-rank candidates: prefer larger declared sizes, then better formats.
-  const ranked = unique
-    .map((c) => ({ ...c, declaredSize: parseSizesAttr(c.sizes) }))
-    .sort((a, b) => {
-      if (b.declaredSize !== a.declaredSize) return b.declaredSize - a.declaredSize;
-      return formatScore(b.type) - formatScore(a.type);
-    });
+async function fetchScraper(domain) {
+  const { html, finalBaseUrl } = await fetchScraperPage(domain);
+  const { rankedPrimary, rankedFallback } = await buildScraperCandidates(domain, html, finalBaseUrl);
 
-  // Try in order; first successful fetch with positive image dimensions wins.
-  let best = null;
-  let bestScore = -1;
-  for (const candidate of ranked.slice(0, 12)) {
-    const result = await fetchFavicon(candidate.href);
-    if (!result) continue;
+  const bestPrimary = await probeScraperCandidates(rankedPrimary, finalBaseUrl);
+  if (bestPrimary) return bestPrimary;
 
-    let width = 0;
-    let format = '';
-    try {
-      const meta = await sharp(result.buffer).metadata();
-      width = Math.min(meta.width || 0, meta.height || 0);
-      format = meta.format || '';
-    } catch {
-      /* non-image or unsupported - skip */
-      continue;
-    }
-
-    if (width <= 0) continue;
-
-    const score = width * 100 + formatScore(format);
-    if (score > bestScore) {
-      bestScore = score;
-      best = { ...result, provider: 'scraper' };
-      if (width >= 128) break;
-    }
-  }
-
-  return best;
+  return probeScraperCandidates(rankedFallback, finalBaseUrl);
 }
 
 module.exports = {

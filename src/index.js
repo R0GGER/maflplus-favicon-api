@@ -1,3 +1,8 @@
+const dns = require('dns');
+// Prefer IPv4 for upstream fetches — many VPS/datacenter IPv6 routes fail or
+// hang against CDNs (e.g. redditstatic.com) while IPv4 works fine.
+dns.setDefaultResultOrder('ipv4first');
+
 const express = require('express');
 const path = require('path');
 const {
@@ -215,12 +220,15 @@ app.get('/l/:domain', async (req, res) => {
   }
 });
 
-// HTML scraper proxy: /s/:domain
+// HTML scraper proxy: /s/:domain[?refresh=1]
 app.get('/s/:domain', async (req, res) => {
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
+  const refresh = req.query.refresh === '1' || req.query.nocache === '1';
+
   try {
+    if (refresh) await cache.del('scraper', domain, null);
     const entry = await fetchWithCache('scraper', domain, null, () => fetchScraper(domain));
     if (!entry) return res.status(502).json({ error: 'Could not scrape favicon.' });
     sendFavicon(res, entry);
@@ -257,6 +265,7 @@ app.get('/providers', (req, res) => {
   res.json({
     logoDev: !!process.env.LOGODEV_TOKEN,
     logoDevToken: process.env.LOGODEV_TOKEN || null,
+    upstreamIpv4: true,
   });
 });
 

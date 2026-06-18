@@ -533,8 +533,7 @@
     <div class="tip">
       <strong><span class="icon">&#9881;</span> Tip</strong>
       Use the favicon directly via <code id="api-example" onclick="copyApiUrl()">https://&lt;this-host&gt;/{domain}</code>,
-      or look up a self-hosted by app name (e.g. firefox, immich, jellyfin, etc.).<br>
-      Click any image to copy its URL. <span class="tip-copied" id="tip-copied">&#10003; URL copied to clipboard</span>
+      or look up a self-hosted by app name (e.g. firefox, immich, jellyfin). Click any image to copy its URL. <span class="tip-copied" id="tip-copied">&#10003; URL copied to clipboard</span>
     </div>
 
     <div class="search-section">
@@ -1067,7 +1066,7 @@
         spinner.style.display = 'none';
         if (card) card.style.display = 'none';
       };
-      imgEl.src = proxyUrl;
+      imgEl.src = `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}_=${Date.now()}`;
     }
 
     function loadDavicon(id, proxyUrl, sourceUrl) {
