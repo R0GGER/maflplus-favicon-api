@@ -325,7 +325,8 @@ app.get('/:domain/json', async (req, res) => {
   const logoDevConfigured = !!process.env.LOGODEV_TOKEN;
   const logodev = {
     proxy: `${host}/l/${encoded}`,
-    source: logoDevConfigured ? PROVIDERS.logoDev(domain, process.env.LOGODEV_TOKEN) : null,
+    // Omit upstream URL: it embeds LOGODEV_TOKEN in the query string.
+    source: null,
     configured: logoDevConfigured,
   };
 
