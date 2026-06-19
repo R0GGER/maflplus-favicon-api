@@ -4,6 +4,7 @@ const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
 const crypto = require('crypto');
+const fs = require('fs');
 const express = require('express');
 const path = require('path');
 const {
@@ -30,8 +31,78 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 app.set('trust proxy', true);
 
+// SEO / templated index. The HTML template ships with `__BASE_URL__` tokens
+// in the <head> (canonical, Open Graph, Twitter Card, JSON-LD) so absolute
+// URLs resolve to whichever public origin the deployment is reached on,
+// without requiring the operator to bake the hostname into the image.
+const INDEX_HTML_TEMPLATE = fs.readFileSync(
+  path.join(__dirname, 'public', 'index.html'),
+  'utf8'
+);
+
+function getBaseUrl(req) {
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function renderIndex(req, res) {
+  const html = INDEX_HTML_TEMPLATE.replace(/__BASE_URL__/g, getBaseUrl(req));
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'no-cache');
+  res.send(html);
+}
+
+app.get(['/', '/index.html'], renderIndex);
+
+// robots.txt: allow indexing of the homepage and static assets only.
+// The favicon API endpoints (catch-all /:domain, /g, /d, ...) are not
+// useful in search results and would otherwise waste crawl budget on a
+// potentially infinite URL space.
+app.get('/robots.txt', (req, res) => {
+  const baseUrl = getBaseUrl(req);
+  const body =
+    '# MAFL+ Favicon API\n' +
+    '# Index the homepage + static assets only; the favicon API endpoints\n' +
+    '# are not useful in search results and produce an unbounded URL space.\n' +
+    '\n' +
+    'User-agent: *\n' +
+    'Allow: /$\n' +
+    'Allow: /favicon.png\n' +
+    'Allow: /logo.png\n' +
+    'Allow: /sitemap.xml\n' +
+    'Disallow: /\n' +
+    '\n' +
+    `Sitemap: ${baseUrl}/sitemap.xml\n`;
+  res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(body);
+});
+
+// sitemap.xml: single-URL sitemap pointing at the homepage. The host is
+// derived from the request so it works behind any reverse proxy without
+// configuration (relies on `trust proxy` above for X-Forwarded-Proto).
+app.get('/sitemap.xml', (req, res) => {
+  const baseUrl = getBaseUrl(req);
+  const body =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    '  <url>\n' +
+    `    <loc>${baseUrl}/</loc>\n` +
+    '    <changefreq>monthly</changefreq>\n' +
+    '    <priority>1.0</priority>\n' +
+    '  </url>\n' +
+    '</urlset>\n';
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(body);
+});
+
 app.use(
   express.static(path.join(__dirname, 'public'), {
+    // Disable directory-index auto-serving so requests for `/` (and the
+    // raw `/index.html` file) are handled by the templated renderIndex
+    // route above — otherwise the unrendered `__BASE_URL__` tokens would
+    // leak to the browser.
+    index: false,
     setHeaders(res, filePath) {
       if (filePath.endsWith('.html')) {
         res.set('Cache-Control', 'no-cache');

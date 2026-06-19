@@ -23,6 +23,8 @@ A lightweight favicon proxy that fetches favicons from multiple providers (HTML 
 | `/s-asset?url=...` | Server-side asset proxy used by the web UI to render every icon discovered by the scraper/besticon. Cached on disk + LRU keyed by SHA-1 of the URL; SSRF-guarded against localhost / private IPv4 ranges and link-local / ULA IPv6; only `http(s)` and a max URL length of 2048. Useful for upstream icons whose CDN blocks direct browser `<img>` loads via Referer/UA filtering. |
 | `/providers` | JSON config indicating which optional providers are enabled |
 | `/{domain}/json` | JSON list of every endpoint URL for the domain |
+| `/robots.txt` | Search-engine crawl directives. Allows indexing of the homepage and static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) only; disallows every favicon endpoint so crawlers don't waste budget on the unbounded `/{domain}` URL space. The `Sitemap:` line is auto-built from the request host. |
+| `/sitemap.xml` | Single-URL sitemap pointing at the homepage. The `<loc>` is auto-built from `req.protocol`/`req.get('host')`, so the correct public origin is used behind any reverse proxy (relies on Express `trust proxy`). |
 
 **Example:** `https://your-host/github.com`
 
@@ -39,6 +41,14 @@ When `BESTICON_URL` is set, the JSON output also exposes every icon besticon fou
 **selfhst example:** `https://your-host/sh/jellyfin`
 
 The web UI accepts both a domain (e.g. `example.com`) and a bare service name without a TLD (e.g. `radarr`, `sonarr`); when no dot is present the input is treated as a selfhst service name and only the selfhst icon card is shown.
+
+## SEO
+
+The homepage (`/` and `/index.html`) is rendered through a small template route that substitutes `__BASE_URL__` tokens in `src/public/index.html` with the request's absolute origin (`${req.protocol}://${req.get('host')}`). This populates `<link rel="canonical">`, the Open Graph (`og:url`, `og:image`), Twitter Card (`twitter:image`) and JSON-LD (`schema.org/WebApplication`) tags with the correct public URL automatically — no environment variable or rebuild required when you put the service behind a new hostname or reverse proxy. The Express app already runs with `trust proxy` enabled so `X-Forwarded-Proto` is honoured.
+
+The `<head>` ships with a descriptive `<title>`, meta `description` / `keywords` / `author` / `theme-color`, Open Graph, Twitter Card and `schema.org/WebApplication` JSON-LD — all crawler/share-card friendly.
+
+`/robots.txt` and `/sitemap.xml` are served from the same dynamic routes (no static file in `src/public/`), again with the host derived from the request. The robots.txt is an allow-list: only the homepage and the three static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) are indexable; everything else (`/g/...`, `/d/...`, `/s/...`, `/{domain}`, ...) is disallowed so search engines don't try to enumerate the unbounded favicon URL space.
 
 ## Docker
 

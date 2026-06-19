@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SEO: `/robots.txt`, `/sitemap.xml` and a templated homepage**
+  - New `GET /robots.txt` route serves an allow-list: only the homepage and the three static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) are indexable; everything else (the `/g/...`, `/g2/...`, `/d/...`, `/y/...`, `/f/...`, `/v/...`, `/p/...`, `/k/...`, `/l/...`, `/s/...`, `/sh/...`, `/s-asset`, `/providers`, `/{domain}` and `/{domain}/json` endpoints) is disallowed so search engines don't enumerate the unbounded favicon URL space. The `Sitemap:` directive is auto-built from `${req.protocol}://${req.get('host')}`.
+  - New `GET /sitemap.xml` route returns a single-URL sitemap pointing at the homepage, with `<loc>` derived from the request host (so it picks up the public origin behind any reverse proxy via the existing `trust proxy` setting; no env var required).
+  - The homepage (`/` and `/index.html`) is now served by a small `renderIndex` route that loads `src/public/index.html` once at startup and substitutes `__BASE_URL__` tokens with the request's absolute origin before sending. This populates `<link rel="canonical">`, Open Graph (`og:url`, `og:image`), Twitter Card (`twitter:image`) and JSON-LD (`schema.org/WebApplication`) absolute URLs automatically, without baking the hostname into the image.
+  - `express.static` is now mounted with `{ index: false }` so requests for `/` and the raw `/index.html` always go through the templated route — preventing the unrendered `__BASE_URL__` placeholders from ever leaking to the browser. All other static assets (`/favicon.png`, `/logo.png`) continue to be served by `express.static`.
+- **SEO meta in `src/public/index.html` `<head>`**
+  - Descriptive `<title>` (`MAFL+ Favicon API – Get high-resolution favicons for any domain`) and meta `description`, `keywords`, `author`, `robots`, `theme-color`, `color-scheme`, `application-name`.
+  - `<link rel="canonical">`, `<link rel="apple-touch-icon">` and `<link rel="sitemap">` for auto-discovery.
+  - Full Open Graph card (`og:type`, `og:site_name`, `og:title`, `og:description`, `og:url`, `og:image` + `og:image:type/width/height/alt`, `og:locale`) for Facebook / LinkedIn / Discord / Slack unfurls.
+  - Twitter Card (`summary` with `twitter:title/description/image/image:alt`).
+  - JSON-LD structured data (`@type: WebApplication`, with `name`, `description`, `url`, `image`, `applicationCategory: DeveloperApplication`, free `Offer`, `author`, `isPartOf: MAFL+` and `sameAs` to the GitHub repos and the MAFL+ wiki).
+  - Documented in `README.md` under a new "SEO" section and the API table rows for `/robots.txt` and `/sitemap.xml`.
 - **`CACHE_SIZE_MB` environment variable** caps the total size of the disk cache (`CACHE_DIR`) in megabytes. When the directory exceeds the configured limit, the oldest entries (by `mtime`) are evicted — both the data file and its `.meta` sibling — until the cache is back under the cap. Each cluster worker keeps a lightweight in-memory index of disk files and rescans the shared cache directory every 60 seconds (and on every set that pushes its local view over the limit) so writes from sibling workers converge into a single accurate view before eviction runs. Set to `0` (default in code) to disable the size cap and fall back to the original TTL-only behaviour. Bundled `docker-compose.yml` and `.env.example` ship `CACHE_SIZE_MB=512` as a sensible upper bound for a typical deployment. Documented in `README.md`.
 - **besticon integration for the HTML scraper**
   - New `BESTICON_URL` environment variable points at a sidecar [besticon](https://github.com/mat/besticon) instance (e.g. `http://besticon:8080`).
