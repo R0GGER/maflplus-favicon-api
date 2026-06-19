@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Browser custom search engine** (`/search?q=...` + `/opensearch.xml`)
+  - New `GET /search?q={query}` route redirects to `/?q={query}` so the homepage loads favicon results for the typed domain or service name. Intended URL for browser search-engine settings: `https://your-host/search?q=%s`.
+  - New `GET /opensearch.xml` OpenSearch descriptor (linked from the homepage `<head>`) for one-click "Add search engine" in Firefox, Chrome and other OpenSearch-aware browsers.
+  - The homepage reads `?q=` on load and auto-runs a lookup.
+  - **Web UI — "Search from browser" modal**: step-by-step setup instructions per browser (Chrome, Edge, Firefox, Safari) with the search-engine URL shown prominently (click-to-copy and as clickable links per section). The URL is derived from `location.origin` at runtime.
+  - **Web UI — "Tools" offcanvas**: the browser-search and bookmarklet actions moved out of the main page flow into a slide-in panel opened from a **Tools** button in the top navigation. Keeps the homepage uncluttered while both shortcuts remain one click away. Closes on backdrop click or Escape; opening the search modal closes the offcanvas first.
 - **homarr-labs/dashboard-icons lookup** (`/di/{service}`)
   - New service-name lookup against the [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) catalog via `cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/...`.
   - Supports `?variant=color|light|dark` with the same `-light` / `-dark` suffix convention used for `/sh/`. Color variant uses the bare slug (`/di/jellyfin` → `png/jellyfin.png`); light/dark map to `png/{slug}-light.png` and `png/{slug}-dark.png`.

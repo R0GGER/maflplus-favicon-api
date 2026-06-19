@@ -22,6 +22,8 @@ A lightweight favicon proxy that fetches favicons from multiple providers (HTML 
 | `/sh/{service}` | [selfhst icons](https://github.com/selfhst/icons) lookup by service name (e.g. `/sh/jellyfin`). Supports `?variant=color\|light\|dark`. |
 | `/di/{service}` | [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) lookup by service name (e.g. `/di/jellyfin`). Supports `?variant=color\|light\|dark`. |
 | `/s-asset?url=...` | Server-side asset proxy used by the web UI to render every icon discovered by the scraper/besticon. Cached on disk + LRU keyed by SHA-1 of the URL; SSRF-guarded against localhost / private IPv4 ranges and link-local / ULA IPv6; only `http(s)` and a max URL length of 2048. Useful for upstream icons whose CDN blocks direct browser `<img>` loads via Referer/UA filtering. |
+| `/search?q={query}` | Browser custom search engine entry point. Redirects to the homepage with the query pre-filled and favicon results loaded (e.g. `/search?q=github.com`). Use `https://your-host/search?q=%s` when adding a search engine in Chrome, Firefox or Edge. |
+| `/opensearch.xml` | OpenSearch descriptor for one-click "Add search engine" in supported browsers. Linked from the homepage `<head>`. |
 | `/providers` | JSON config indicating which optional providers are enabled |
 | `/{domain}/json` | JSON list of every endpoint URL for the domain |
 | `/robots.txt` | Search-engine crawl directives. Allows indexing of the homepage and static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) only; disallows every favicon endpoint so crawlers don't waste budget on the unbounded `/{domain}` URL space. The `Sitemap:` line is auto-built from the request host. |

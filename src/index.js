@@ -54,6 +54,31 @@ function renderIndex(req, res) {
 
 app.get(['/', '/index.html'], renderIndex);
 
+// Browser custom search engine: /search?q=example.com → homepage with results.
+app.get('/search', (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  if (!q) {
+    return res.redirect(302, '/');
+  }
+  res.redirect(302, `/?q=${encodeURIComponent(q)}`);
+});
+
+// OpenSearch descriptor for one-click "Add search engine" in Firefox/Chrome/etc.
+app.get('/opensearch.xml', (req, res) => {
+  const baseUrl = getBaseUrl(req);
+  const body =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">\n' +
+    '  <ShortName>MAFL+ Favicon</ShortName>\n' +
+    '  <Description>Look up favicons for any domain or service name</Description>\n' +
+    `  <Url type="text/html" template="${baseUrl}/search?q={searchTerms}"/>\n` +
+    `  <Image height="64" width="64" type="image/png">${baseUrl}/favicon.png</Image>\n` +
+    '</OpenSearchDescription>\n';
+  res.set('Content-Type', 'application/opensearchdescription+xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(body);
+});
+
 // robots.txt: allow indexing of the homepage and static assets only.
 // The favicon API endpoints (catch-all /:domain, /g, /d, ...) are not
 // useful in search results and would otherwise waste crawl budget on a
