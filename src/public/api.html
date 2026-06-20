@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>API &ndash; MAFL+ Favicon API</title>
-  <meta name="description" content="JSON API reference and interactive playground for the MAFL+ Favicon API. Fetch a 256x256 PNG favicon for any domain through GET /api/v1/favicon, with optional API-key authentication, monthly quotas and a 7-day CDN cache.">
+  <meta name="description" content="JSON API reference and interactive playground for the MAFL+ Favicon API. Fetch a 128x128 PNG favicon for any domain through GET /api/v1/favicon, with optional API-key authentication, monthly quotas and a 7-day CDN cache.">
   <meta name="keywords" content="favicon api, favicon json api, favicon api documentation, favicon playground, faviconapis alternative, self-hosted favicon api">
   <meta name="author" content="R0GGER">
   <meta name="robots" content="index, follow">
@@ -20,7 +20,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MAFL+ Favicon API">
   <meta property="og:title" content="API &ndash; MAFL+ Favicon API">
-  <meta property="og:description" content="JSON API reference and interactive playground for the MAFL+ Favicon API. Fetch a 256x256 PNG favicon for any domain through GET /api/v1/favicon.">
+  <meta property="og:description" content="JSON API reference and interactive playground for the MAFL+ Favicon API. Fetch a 128x128 PNG favicon for any domain through GET /api/v1/favicon.">
   <meta property="og:url" content="__BASE_URL__/api">
   <meta property="og:image" content="__BASE_URL__/logo.png">
   <meta property="og:image:type" content="image/png">
@@ -39,7 +39,7 @@
     "@context": "https://schema.org",
     "@type": "TechArticle",
     "headline": "MAFL+ Favicon API \u2013 JSON API reference",
-    "description": "JSON API reference and interactive playground for the MAFL+ Favicon API. GET /api/v1/favicon returns a CDN URL to a normalized 256x256 PNG favicon for any domain.",
+    "description": "JSON API reference and interactive playground for the MAFL+ Favicon API. GET /api/v1/favicon returns a CDN URL to a normalized 128x128 PNG favicon for any domain.",
     "url": "__BASE_URL__/api",
     "image": "__BASE_URL__/logo.png",
     "author": {
@@ -1049,7 +1049,7 @@
   <div class="container">
     <img src="/logo.png" alt="MAFL+ Favicon API" class="site-logo">
     <h1>API Reference</h1>
-    <p class="subtitle">A simple JSON API to fetch a normalized 256&times;256 PNG favicon for any domain.</p>
+    <p class="subtitle">A simple JSON API to fetch a normalized 128&times;128 PNG favicon for any domain.</p>
 
     <div class="api-mode" id="api-mode-banner">
       <span class="badge" id="api-mode-badge">
@@ -1062,7 +1062,7 @@
     <!-- Quick start -->
     <section class="block" id="quick-start">
       <h2>Quick start <a class="anchor" href="#quick-start" aria-label="Anchor link">#</a></h2>
-      <p class="lead">One <code>GET</code> request returns a JSON object containing a CDN URL to a normalized 256&times;256 PNG favicon plus cache metadata. The PNG itself is served separately by <code>/cdn/favicons/{domain}.png</code> and is cached on disk for 7 days.</p>
+      <p class="lead">One <code>GET</code> request returns a JSON object containing a CDN URL to a normalized 128&times;128 PNG favicon plus cache metadata. The PNG itself is served separately by <code>/cdn/favicons/{domain}.png</code> and is cached on disk for 7 days.</p>
 
       <div class="endpoint-line">
         <span class="pill method">GET</span>
@@ -1253,7 +1253,7 @@ docker compose exec maflplus-favicon-api npm run keys:revoke -- --prefix fa_abcd
         <tbody>
           <tr><td><code>url</code></td><td>string</td><td>Public CDN URL of the cached PNG (<code>/cdn/favicons/{domain}.png</code>).</td></tr>
           <tr><td><code>domain</code></td><td>string</td><td>Normalized hostname extracted from the input.</td></tr>
-          <tr><td><code>width</code> / <code>height</code></td><td>number</td><td>Always 256 &times; 256.</td></tr>
+          <tr><td><code>width</code> / <code>height</code></td><td>number</td><td>Always 128 &times; 128.</td></tr>
           <tr><td><code>format</code></td><td>string</td><td>Always <code>"png"</code>.</td></tr>
           <tr><td><code>sourceType</code></td><td>string</td><td>Where the icon came from, in priority order: <code>svg</code> &gt; <code>manifest</code> &gt; <code>apple-touch-icon</code> &gt; <code>png</code> &gt; <code>ico</code>.</td></tr>
           <tr><td><code>cached</code></td><td>boolean</td><td><code>true</code> if served from the 7-day disk cache, <code>false</code> if just generated.</td></tr>
@@ -1557,8 +1557,8 @@ print(data["url"])`;
         {
           url: `${ORIGIN}/cdn/favicons/github.com.png`,
           domain: 'github.com',
-          width: 256,
-          height: 256,
+          width: 128,
+          height: 128,
           format: 'png',
           sourceType: 'svg',
           cached: true,

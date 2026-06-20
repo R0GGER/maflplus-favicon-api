@@ -462,7 +462,7 @@ async function fetchManifestIcons(manifestUrl, referer) {
       .filter((icon) => {
         if (!icon || !icon.src || isMonochromeManifestIcon(icon)) return false;
         const size = parseSizesAttr(icon.sizes || '');
-        return size >= 512;
+        return size >= 128;
       })
       .map((icon) => ({
         href: new URL(icon.src, manifestUrl).toString(),
@@ -840,5 +840,6 @@ module.exports = {
   fetchBesticonAllIcons,
   fetchScraperAllIcons,
   parseSizesAttr,
+  expandSizedVariants,
   PROVIDERS,
 };

@@ -4,12 +4,52 @@ const {
   fetchManifestIcons,
   fetchScraperAsset,
   parseSizesAttr,
+  expandSizedVariants,
+  PROVIDERS,
 } = require('./providers');
 const cheerio = require('cheerio');
+const sharp = require('sharp');
 
 // FaviconAPIs source priority. The first tier to produce a usable icon wins;
 // within a tier we try the largest declared size first.
-const SOURCE_TYPES = ['svg', 'manifest', 'apple-touch-icon', 'png', 'ico'];
+// Prefer sources larger than 128px across all tiers; only accept exactly 128px
+// when no larger source exists anywhere (see fetchBySourcePriority).
+// ICO is excluded: .ico files contain small frames (16–48px) that cannot
+// meet the 128px minimum source size.
+const SOURCE_TYPES = [
+  'svg',
+  'manifest',
+  'apple-touch-icon',
+  'png',
+  'selfhst',
+  'dashboardicons',
+  'external',
+];
+
+const SERVICE_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/;
+
+function serviceSlugFromDomain(domain) {
+  const first = domain.toLowerCase().split('.')[0];
+  const slug = first.replace(/[^a-z0-9._-]/g, '');
+  return SERVICE_SLUG_RE.test(slug) ? slug : null;
+}
+
+const { MIN_SOURCE_SIZE } = require('./imageNormalize');
+
+// Well-known paths most sites serve even without HTML link tags.
+const STANDARD_FALLBACKS = [
+  { path: '/apple-touch-icon.png', tier: 'apple-touch-icon', sizes: '180x180' },
+  { path: '/apple-touch-icon-precomposed.png', tier: 'apple-touch-icon', sizes: '180x180' },
+  { path: '/android-chrome-512x512.png', tier: 'png', sizes: '512x512' },
+  { path: '/android-chrome-192x192.png', tier: 'png', sizes: '192x192' },
+];
+
+// Google's faviconV2 service — request 256px so we can downscale to 128 with
+// better quality when this last-resort tier is the only option.
+const EXTERNAL_FAVICON_SIZE = 256;
+function externalFaviconUrl(domain) {
+  return `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=${EXTERNAL_FAVICON_SIZE}`;
+}
 
 function classifyLinkCandidate(candidate) {
   const rel = String(candidate.rel || '').toLowerCase();
@@ -20,8 +60,6 @@ function classifyLinkCandidate(candidate) {
   if (rel.includes('apple-touch-icon')) return 'apple-touch-icon';
   if (type.includes('svg') || path.endsWith('.svg')) return 'svg';
   if (path.endsWith('.ico') || type.includes('ico') || type === 'image/x-icon') {
-    // Some sites declare /favicon.ico via <link rel="shortcut icon">; keep it
-    // in the ico tier so it loses to a manifest/png/apple-touch-icon hit.
     return 'ico';
   }
   return 'png';
@@ -45,23 +83,66 @@ function dedupeByHref(list) {
   return out;
 }
 
+function isPreferredSource(hit) {
+  if (hit.isSvg) return true;
+  return Math.max(hit.sourceWidth, hit.sourceHeight) > MIN_SOURCE_SIZE;
+}
+
 async function tryCandidate(href, referer) {
   const result = await fetchScraperAsset(href, referer);
   if (!result || !result.buffer || result.buffer.length === 0) return null;
+
+  const contentType = (result.contentType || '').toLowerCase();
+  const isSvg = contentType.includes('svg') || href.toLowerCase().endsWith('.svg');
+  let sourceWidth = 0;
+  let sourceHeight = 0;
+
+  if (isSvg) {
+    sourceWidth = MIN_SOURCE_SIZE + 1;
+    sourceHeight = MIN_SOURCE_SIZE + 1;
+  } else {
+    try {
+      const meta = await sharp(result.buffer).metadata();
+      sourceWidth = meta.width || 0;
+      sourceHeight = meta.height || 0;
+      if (
+        sourceWidth < MIN_SOURCE_SIZE ||
+        sourceHeight < MIN_SOURCE_SIZE
+      ) {
+        return null;
+      }
+    } catch {
+      // If sharp can't read metadata, let downstream normalization handle it.
+    }
+  }
+
   return {
     buffer: result.buffer,
-    contentType: result.contentType || 'application/octet-stream',
+    contentType: contentType || 'application/octet-stream',
     sourceUrl: result.url || href,
+    isSvg,
+    sourceWidth,
+    sourceHeight,
   };
 }
 
-async function findInTier(candidates, referer) {
+async function evaluateTier(candidates, referer) {
   const sorted = dedupeByHref([...candidates]).sort(sortBySizeDesc);
+  let fallback = null;
+
   for (const candidate of sorted) {
     const hit = await tryCandidate(candidate.href, referer);
-    if (hit) return hit;
+    if (!hit) continue;
+    if (isPreferredSource(hit)) return { preferred: hit, fallback: null };
+    if (!fallback) fallback = hit;
   }
-  return null;
+
+  return { preferred: null, fallback };
+}
+
+async function findInTier(candidates, referer) {
+  const { preferred, fallback } = await evaluateTier(candidates, referer);
+  return preferred || fallback;
 }
 
 async function gatherCandidates(domain) {
@@ -71,6 +152,9 @@ async function gatherCandidates(domain) {
     'apple-touch-icon': [],
     png: [],
     ico: [],
+    selfhst: [],
+    dashboardicons: [],
+    external: [],
   };
 
   const { html, finalBaseUrl } = await fetchScraperPage(domain);
@@ -86,9 +170,11 @@ async function gatherCandidates(domain) {
       for (const candidate of primaryCandidates) {
         const tier = classifyLinkCandidate(candidate);
         buckets[tier].push(candidate);
+        for (const variant of expandSizedVariants(candidate.href)) {
+          buckets[tier].push({ ...candidate, ...variant });
+        }
       }
 
-      // Manifest icons are tier-2 (after svg, before apple-touch-icon).
       try {
         const $ = cheerio.load(html);
         const manifestHref = $('link[rel="manifest"]').attr('href');
@@ -111,21 +197,48 @@ async function gatherCandidates(domain) {
         /* manifest parsing/fetching is best-effort */
       }
     } catch {
-      /* HTML parsing failure: still try /favicon.ico below */
+      /* HTML parsing failure */
     }
   }
 
-  // Lowest-priority fallback: well-known /favicon.ico at the root.
-  try {
-    buckets.ico.push({
-      href: new URL('/favicon.ico', baseUrl).toString(),
-      sizes: '',
-      type: 'image/x-icon',
-      rel: 'icon',
-    });
-  } catch {
-    /* ignore */
+  // Standard well-known paths as fallback candidates.
+  for (const fb of STANDARD_FALLBACKS) {
+    try {
+      buckets[fb.tier].push({
+        href: new URL(fb.path, baseUrl).toString(),
+        sizes: fb.sizes,
+        type: 'image/png',
+        rel: 'fallback',
+      });
+    } catch {
+      /* ignore */
+    }
   }
+
+  // Service-name icon packs (domain label → slug, e.g. google.com → google).
+  const serviceSlug = serviceSlugFromDomain(domain);
+  if (serviceSlug) {
+    buckets.selfhst.push({
+      href: PROVIDERS.selfhst(serviceSlug),
+      sizes: '256x256',
+      type: 'image/png',
+      rel: 'selfhst',
+    });
+    buckets.dashboardicons.push({
+      href: PROVIDERS.dashboardIcons(serviceSlug),
+      sizes: '256x256',
+      type: 'image/png',
+      rel: 'dashboardicons',
+    });
+  }
+
+  // External provider as last-resort tier.
+  buckets.external.push({
+    href: externalFaviconUrl(domain),
+    sizes: `${EXTERNAL_FAVICON_SIZE}x${EXTERNAL_FAVICON_SIZE}`,
+    type: 'image/png',
+    rel: 'external',
+  });
 
   return { buckets, referer };
 }
@@ -133,18 +246,35 @@ async function gatherCandidates(domain) {
 async function fetchBySourcePriority(domain) {
   const { buckets, referer } = await gatherCandidates(domain);
 
+  let minimumFallback = null;
+  let minimumFallbackType = null;
+
   for (const sourceType of SOURCE_TYPES) {
     const tier = buckets[sourceType];
     if (!tier || tier.length === 0) continue;
-    const hit = await findInTier(tier, referer);
-    if (hit) {
+
+    const { preferred, fallback } = await evaluateTier(tier, referer);
+    if (preferred) {
       return {
-        buffer: hit.buffer,
-        contentType: hit.contentType,
-        sourceUrl: hit.sourceUrl,
+        buffer: preferred.buffer,
+        contentType: preferred.contentType,
+        sourceUrl: preferred.sourceUrl,
         sourceType,
       };
     }
+    if (fallback && !minimumFallback) {
+      minimumFallback = fallback;
+      minimumFallbackType = sourceType;
+    }
+  }
+
+  if (minimumFallback) {
+    return {
+      buffer: minimumFallback.buffer,
+      contentType: minimumFallback.contentType,
+      sourceUrl: minimumFallback.sourceUrl,
+      sourceType: minimumFallbackType,
+    };
   }
 
   return null;

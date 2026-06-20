@@ -2,11 +2,29 @@
 
 A lightweight favicon proxy that fetches favicons from multiple providers (HTML scraper, Google, Google v2, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon-3j1, Faviconkit, logo.dev) plus service-name lookups against the [selfhst icons](https://github.com/selfhst/icons) and [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) catalogs. Includes a web UI and a simple API to grab any website's favicon.
 
+## Documentation
+
+Full documentation lives in the [`docs/`](docs/) folder:
+
+| Guide | Topics |
+|---|---|
+| [docs/README.md](docs/README.md) | Index and quick links |
+| [Getting started](docs/getting-started.md) | Docker Compose, local dev, verification |
+| [Web UI](docs/web-ui.md) | Search, tools panel, browser integration |
+| [API reference](docs/api-reference.md) | All HTTP routes |
+| [API v1](docs/api-v1.md) | JSON endpoint, auth, quotas, key management |
+| [Configuration](docs/configuration.md) | Complete environment variable reference |
+| [Architecture](docs/architecture.md) | Caching, clustering, scraper pipeline |
+| [Deployment](docs/deployment.md) | Production, reverse proxy, monitoring |
+| [SEO](docs/seo.md) | Indexing, Open Graph, sitemap |
+
+Interactive API docs and a live playground are also available at `/api` on a running instance.
+
 ## API
 
 | Endpoint | Description |
 |---|---|
-| `/{domain}` | Best favicon (cascading fallback through all domain-based providers) |
+| `/{domain}` | Best favicon (parallel provider race; optional head-start for `DEFAULT_PROVIDER`) |
 | `/s/{domain}` | HTML scraper: parses the site's `<link rel="icon">`, web manifest and standard fallbacks. When `BESTICON_URL` is set, candidate discovery is delegated to a sidecar [besticon](https://github.com/mat/besticon) instance via `/allicons.json?url=...` and falls back to the built-in scraper if besticon yields nothing. Append `?refresh=1` to bypass the cache and re-scrape (see below). |
 | `/g/{size}/{domain}` | Google favicon (sizes 16, 32, 64, 128) |
 | `/g2/{size}/{domain}` | Google v2 (`faviconV2`) favicon (sizes 16, 32, 64, 128, 256) |
@@ -28,8 +46,8 @@ A lightweight favicon proxy that fetches favicons from multiple providers (HTML 
 | `/{domain}/json` | JSON list of every endpoint URL for the domain |
 | `/api/v1/favicon?url=...` | **FaviconAPIs-compatible JSON endpoint.** Returns a JSON response (not the image bytes) with a CDN URL to a normalized 256x256 PNG, the detected `sourceType` (`svg` > `manifest` > `apple-touch-icon` > `png` > `ico`), and cache metadata. Requires an API key (Bearer or `?key=`). See [API v1](#api-v1-faviconapis-style) below. |
 | `/cdn/favicons/{domain}.png` | Public CDN route that serves the 256x256 PNG cached by `/api/v1/favicon`. Sends `Cache-Control: public, max-age=604800, immutable`. |
-| `/robots.txt` | Search-engine crawl directives. Allows indexing of the homepage and static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) only; disallows every favicon endpoint so crawlers don't waste budget on the unbounded `/{domain}` URL space. The `Sitemap:` line is auto-built from the request host. |
-| `/sitemap.xml` | Single-URL sitemap pointing at the homepage. The `<loc>` is auto-built from `req.protocol`/`req.get('host')`, so the correct public origin is used behind any reverse proxy (relies on Express `trust proxy`). |
+| `/robots.txt` | Search-engine crawl directives. Allows indexing of the homepage, API docs (`/api`), and static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`); disallows every favicon endpoint so crawlers don't waste budget on the unbounded `/{domain}` URL space. The `Sitemap:` line is auto-built from the request host. |
+| `/sitemap.xml` | Sitemap for the homepage and API docs page. The `<loc>` is auto-built from `req.protocol`/`req.get('host')`, so the correct public origin is used behind any reverse proxy (relies on Express `trust proxy`). |
 
 **Example:** `https://your-host/github.com`
 
@@ -154,7 +172,7 @@ The homepage (`/` and `/index.html`) is rendered through a small template route 
 
 The `<head>` ships with a descriptive `<title>`, meta `description` / `keywords` / `author` / `theme-color`, Open Graph, Twitter Card and `schema.org/WebApplication` JSON-LD — all crawler/share-card friendly.
 
-`/robots.txt` and `/sitemap.xml` are served from the same dynamic routes (no static file in `src/public/`), again with the host derived from the request. The robots.txt is an allow-list: only the homepage and the three static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) are indexable; everything else (`/g/...`, `/d/...`, `/s/...`, `/{domain}`, ...) is disallowed so search engines don't try to enumerate the unbounded favicon URL space.
+`/robots.txt` and `/sitemap.xml` are served from dynamic routes (no static file in `src/public/`), again with the host derived from the request. The robots.txt is an allow-list: the homepage, API docs page (`/api`), and static assets (`/favicon.png`, `/logo.png`, `/sitemap.xml`) are indexable; everything else (`/g/...`, `/d/...`, `/s/...`, `/{domain}`, …) is disallowed so search engines don't try to enumerate the unbounded favicon URL space.
 
 ## Docker
 
@@ -267,3 +285,5 @@ Then use the host path in your `docker-compose.yml`:
 | `LOGODEV_TOKEN` | _(unset)_ | Optional [logo.dev](https://www.logo.dev/) publishable key. When unset, `/l/{domain}` returns 503 and the logo.dev card is hidden in the UI. |
 | `DEFAULT_PROVIDER` | _(unset)_ | Optional preferred provider for `/{domain}` requests. Since providers are now raced in parallel, this provider gets a `PICK_HEAD_START_MS` ms head-start over the others — so it usually wins when reachable, but a slow/failing favorite no longer blocks the response. Valid values: `scraper`, `google`, `googlev2`, `duckduckgo`, `yandex`, `faviconso`, `vemetric`, `favicondev`, `faviconkit`, `logodev`, `selfhst`, `dashboardicons`. Note: `logodev` requires `LOGODEV_TOKEN`. |
 | `BESTICON_URL` | _(unset)_ | Optional base URL of a sidecar [besticon](https://github.com/mat/besticon) instance (e.g. `http://besticon:8080`). When set, `/s/{domain}` first asks besticon's `/allicons.json?url={domain}` for the icon list, then probes/picks the best one locally. Falls back to the built-in HTML scraper when besticon is unreachable or returns no candidates. The bundled `docker-compose.yml` runs besticon as an internal-only service (no exposed port; its frontend at `/` is not publicly reachable). |
+
+For API v1 settings (`API_KEYS_DB`, `API_CACHE_DIR`, `API_REQUIRE_KEY`, `PLAN_*_LIMIT`, etc.) see [docs/configuration.md](docs/configuration.md) and [`.env.example`](.env.example).

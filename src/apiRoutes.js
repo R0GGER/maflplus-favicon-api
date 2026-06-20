@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs/promises');
 const path = require('path');
+const sharp = require('sharp');
 const apiStore = require('./apiStore');
 const { fetchBySourcePriority } = require('./apiScraper');
 const { toPng256, TARGET_SIZE } = require('./imageNormalize');
@@ -100,6 +101,12 @@ async function readCachedEntry(domain) {
     } catch {
       meta = {};
     }
+
+    // Drop entries created before uniform 128×128 output (or with a mismatched PNG).
+    if (meta.width !== TARGET_SIZE || meta.height !== TARGET_SIZE) return null;
+    const pngMeta = await sharp(file).metadata();
+    if (pngMeta.width !== TARGET_SIZE || pngMeta.height !== TARGET_SIZE) return null;
+
     return {
       mtime: stat.mtimeMs,
       sourceType: meta.sourceType || 'png',
@@ -117,7 +124,11 @@ async function writeCachedEntry(domain, pngBuffer, sourceType) {
     fs.writeFile(pngPath(domain), pngBuffer),
     fs.writeFile(
       metaPath(domain),
-      JSON.stringify({ sourceType, cachedAt }, null, 0)
+      JSON.stringify(
+        { sourceType, width: TARGET_SIZE, height: TARGET_SIZE, cachedAt },
+        null,
+        0
+      )
     ),
   ]);
   return cachedAt;

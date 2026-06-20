@@ -1,12 +1,21 @@
 const sharp = require('sharp');
 const decodeIco = require('decode-ico');
 
-const TARGET_SIZE = 256;
-// 4x default 96 dpi so SVGs rasterize crisply at 256px.
-const SVG_DENSITY = 384;
+const TARGET_SIZE = 128;
+// Minimum acceptable source image size (applies to ICO frames and raster images).
+const MIN_SOURCE_SIZE = 128;
+// 4x default 96 dpi so SVGs rasterize crisply at TARGET_SIZE (128px).
+const SVG_DENSITY = 192;
 
 function transparentBackground() {
   return { r: 0, g: 0, b: 0, alpha: 0 };
+}
+
+function resizeOptions() {
+  return {
+    fit: 'contain',
+    background: transparentBackground(),
+  };
 }
 
 function looksLikeSvg(buffer) {
@@ -21,7 +30,6 @@ function looksLikeSvg(buffer) {
 
 function looksLikeIco(buffer) {
   if (!buffer || buffer.length < 4) return false;
-  // ICO header: reserved=0, type=1 (icon) or 2 (cursor).
   return (
     buffer[0] === 0x00 &&
     buffer[1] === 0x00 &&
@@ -32,10 +40,7 @@ function looksLikeIco(buffer) {
 
 async function rasterizeSvg(buffer) {
   return sharp(buffer, { density: SVG_DENSITY })
-    .resize(TARGET_SIZE, TARGET_SIZE, {
-      fit: 'contain',
-      background: transparentBackground(),
-    })
+    .resize(TARGET_SIZE, TARGET_SIZE, resizeOptions())
     .png()
     .toBuffer();
 }
@@ -59,41 +64,53 @@ async function rasterizeIco(buffer) {
   const frame = pickLargestIcoFrame(frames);
   if (!frame) throw new Error('ICO contained no decodable frames');
 
-  // decode-ico returns either { type: 'png', data: Buffer } where data is a
-  // ready-to-decode PNG, or { type: 'bmp', data: Uint8ClampedArray } with raw
-  // RGBA bytes. Handle both.
-  if (frame.type === 'png') {
-    return sharp(Buffer.from(frame.data))
-      .resize(TARGET_SIZE, TARGET_SIZE, {
-        fit: 'contain',
-        background: transparentBackground(),
-      })
-      .png()
-      .toBuffer();
+  if (frame.width < MIN_SOURCE_SIZE || frame.height < MIN_SOURCE_SIZE) {
+    throw new Error(
+      `ICO largest frame is ${frame.width}x${frame.height}, below minimum ${MIN_SOURCE_SIZE}px`
+    );
   }
 
-  return sharp(Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), {
-    raw: { width: frame.width, height: frame.height, channels: 4 },
-  })
-    .resize(TARGET_SIZE, TARGET_SIZE, {
-      fit: 'contain',
-      background: transparentBackground(),
-    })
-    .png()
-    .toBuffer();
+  let input;
+  if (frame.type === 'png') {
+    input = sharp(Buffer.from(frame.data));
+  } else {
+    input = sharp(Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), {
+      raw: { width: frame.width, height: frame.height, channels: 4 },
+    });
+  }
+
+  return input.resize(TARGET_SIZE, TARGET_SIZE, resizeOptions()).png().toBuffer();
 }
 
 async function rasterizeRaster(buffer) {
+  const metadata = await sharp(buffer).metadata();
+  if (
+    !metadata.width ||
+    !metadata.height ||
+    metadata.width < MIN_SOURCE_SIZE ||
+    metadata.height < MIN_SOURCE_SIZE
+  ) {
+    throw new Error(
+      `Source image is ${metadata.width || 0}x${metadata.height || 0}, below minimum ${MIN_SOURCE_SIZE}px`
+    );
+  }
+
   return sharp(buffer)
-    .resize(TARGET_SIZE, TARGET_SIZE, {
-      fit: 'contain',
-      background: transparentBackground(),
-    })
+    .resize(TARGET_SIZE, TARGET_SIZE, resizeOptions())
     .png()
     .toBuffer();
 }
 
-async function toPng256(buffer, { hintFormat = null } = {}) {
+async function ensureExactSize(buffer) {
+  const meta = await sharp(buffer).metadata();
+  if (meta.width === TARGET_SIZE && meta.height === TARGET_SIZE) return buffer;
+  return sharp(buffer)
+    .resize(TARGET_SIZE, TARGET_SIZE, resizeOptions())
+    .png()
+    .toBuffer();
+}
+
+async function toPng(buffer, { hintFormat = null } = {}) {
   if (!buffer || buffer.length === 0) {
     throw new Error('Empty image buffer');
   }
@@ -111,8 +128,6 @@ async function toPng256(buffer, { hintFormat = null } = {}) {
     try {
       png = await rasterizeRaster(buffer);
     } catch (err) {
-      // sharp rejects unsupported formats (e.g. an ICO mis-detected as raster);
-      // fall back to ICO decoding before giving up.
       if (looksLikeIco(buffer)) {
         png = await rasterizeIco(buffer);
       } else {
@@ -120,6 +135,8 @@ async function toPng256(buffer, { hintFormat = null } = {}) {
       }
     }
   }
+
+  png = await ensureExactSize(png);
 
   return {
     buffer: png,
@@ -129,7 +146,12 @@ async function toPng256(buffer, { hintFormat = null } = {}) {
   };
 }
 
+// Keep legacy export name for compatibility
+const toPng256 = toPng;
+
 module.exports = {
   toPng256,
+  toPng,
   TARGET_SIZE,
+  MIN_SOURCE_SIZE,
 };
