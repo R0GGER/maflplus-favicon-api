@@ -87,7 +87,7 @@ app.get('/opensearch.xml', (req, res) => {
   const body =
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">\n' +
-    '  <ShortName>MAFL+ Favicon</ShortName>\n' +
+    '  <ShortName>FaviconAPI</ShortName>\n' +
     '  <Description>Look up favicons for any domain or service name</Description>\n' +
     `  <Url type="text/html" template="${baseUrl}/search?q={searchTerms}"/>\n` +
     `  <Image height="64" width="64" type="image/png">${baseUrl}/favicon.png</Image>\n` +
@@ -104,7 +104,7 @@ app.get('/opensearch.xml', (req, res) => {
 app.get('/robots.txt', (req, res) => {
   const baseUrl = getBaseUrl(req);
   const body =
-    '# MAFL+ Favicon API\n' +
+    '# FaviconAPI\n' +
     '# Index the homepage + static assets only; the favicon API endpoints\n' +
     '# are not useful in search results and produce an unbounded URL space.\n' +
     '\n' +

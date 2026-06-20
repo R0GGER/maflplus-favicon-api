@@ -4,48 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>MAFL+ Favicon API &ndash; Get high-resolution favicons for any domain</title>
+  <title>FaviconAPI &ndash; Get high-resolution favicons for any domain</title>
   <meta name="description" content="Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, logo.dev) plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.">
   <meta name="keywords" content="favicon, favicon api, favicon fetcher, favicon proxy, favicon downloader, get favicon, high resolution favicon, selfhst icons, homarr dashboard icons, MAFL, MAFL+, dashboard icons, homepage icons, self-hosted">
   <meta name="author" content="R0GGER">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#5b2e7e">
   <meta name="color-scheme" content="light">
-  <meta name="application-name" content="MAFL+ Favicon API">
+  <meta name="application-name" content="FaviconAPI">
 
   <link rel="canonical" href="__BASE_URL__/">
-  <link rel="icon" type="image/png" href="/favicon.png">
-  <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicons/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicons/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+  <link rel="shortcut icon" href="/favicons/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+  <link rel="manifest" href="/favicons/manifest.json">
+  <meta name="msapplication-TileColor" content="#5b2e7e">
+  <meta name="msapplication-TileImage" content="/favicons/ms-icon-144x144.png">
   <link rel="sitemap" type="application/xml" href="/sitemap.xml">
-  <link rel="search" type="application/opensearchdescription+xml" title="MAFL+ Favicon API" href="/opensearch.xml">
+  <link rel="search" type="application/opensearchdescription+xml" title="FaviconAPI" href="/opensearch.xml">
 
   <!-- Open Graph (Facebook, LinkedIn, Discord, Slack, ...) -->
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="MAFL+ Favicon API">
-  <meta property="og:title" content="MAFL+ Favicon API &ndash; Get high-resolution favicons for any domain">
+  <meta property="og:site_name" content="FaviconAPI">
+  <meta property="og:title" content="FaviconAPI &ndash; Get high-resolution favicons for any domain">
   <meta property="og:description" content="Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers, plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.">
   <meta property="og:url" content="__BASE_URL__/">
   <meta property="og:image" content="__BASE_URL__/logo.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="150">
   <meta property="og:image:height" content="150">
-  <meta property="og:image:alt" content="MAFL+ Favicon API logo">
+  <meta property="og:image:alt" content="FaviconAPI logo">
   <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="MAFL+ Favicon API &ndash; Get high-resolution favicons for any domain">
+  <meta name="twitter:title" content="FaviconAPI &ndash; Get high-resolution favicons for any domain">
   <meta name="twitter:description" content="Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers, plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.">
   <meta name="twitter:image" content="__BASE_URL__/logo.png">
-  <meta name="twitter:image:alt" content="MAFL+ Favicon API logo">
+  <meta name="twitter:image:alt" content="FaviconAPI logo">
 
   <!-- JSON-LD structured data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    "name": "MAFL+ Favicon API",
-    "alternateName": "MAFL Plus Favicon API",
+    "name": "FaviconAPI",
+    "alternateName": "Favicon API",
     "description": "Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, logo.dev), plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.",
     "url": "__BASE_URL__/",
     "image": "__BASE_URL__/logo.png",
@@ -819,8 +826,7 @@
         margin-bottom: 1rem;
       }
 
-      .top-nav-btn,
-      .top-nav a[href*="github.com"] {
+      .top-nav-btn {
         display: none;
       }
 
@@ -902,19 +908,67 @@
     }
 
     footer.page-footer {
-      text-align: center;
-      font-size: 0.8rem;
-      color: #8a8480;
-      margin-top: 2rem;
-      padding-top: 1rem;
+      margin-top: 2.5rem;
+      padding-top: 1.25rem;
       border-top: 1px solid #ece6de;
+      text-align: center;
+    }
+
+    footer.page-footer a.footer-brand {
+      display: inline-block;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #b0aaa4;
+      margin-bottom: 0.5rem;
+      padding: 0;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    footer.page-footer a.footer-brand:hover {
+      background: transparent;
+      color: #5b2e7e;
+    }
+
+    footer.page-footer .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 0.35rem;
     }
 
     footer.page-footer a {
-      color: #5b2e7e;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.15rem 0.4rem;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #8a8480;
+      font-size: 0.75rem;
+      font-weight: 400;
       text-decoration: none;
+      transition: color 0.15s, background 0.15s;
     }
-    footer.page-footer a:hover { text-decoration: underline; }
+
+    footer.page-footer a:hover {
+      background: rgba(91, 46, 126, 0.06);
+      color: #5b2e7e;
+    }
+
+    footer.page-footer a svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+      opacity: 0.75;
+    }
+
+    footer.page-footer a:hover svg {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -931,23 +985,15 @@
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.854 4.854a.5.5 0 1 0-.708-.708l-3.5 3.5a.5.5 0 0 0 0 .708l3.5 3.5a.5.5 0 0 0 .708-.708L2.707 8l3.147-3.146zm4.292 0a.5.5 0 0 1 .708-.708l3.5 3.5a.5.5 0 0 1 0 .708l-3.5 3.5a.5.5 0 0 1-.708-.708L13.293 8l-3.147-3.146z"/></svg>
       API
     </a>
-    <a href="https://github.com/R0GGER/maflplus" target="_blank" rel="noopener">
-      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      MAFL+
-    </a>
-    <a href="https://github.com/R0GGER/maflplus-favicon-api" target="_blank" rel="noopener">
-      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      Favicon API
-    </a>
     <a href="https://wiki.maflplus.eu/mafl/icons#favicon-api" target="_blank" rel="noopener">
       <svg viewBox="0 0 16 16"><path d="M0 1.75A.75.75 0 01.75 1h4.253c1.227 0 2.317.59 3 1.501A3.744 3.744 0 0111.006 1h4.245a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-4.507a2.25 2.25 0 00-1.591.659l-.622.621a.75.75 0 01-1.06 0l-.622-.621A2.25 2.25 0 005.258 13H.75a.75.75 0 01-.75-.75V1.75zm7.251 10.324V2.922a2.25 2.25 0 00-2.248-2.172H1.5v10h3.757a3.75 3.75 0 012 .578zM8.75 12.074V2.922a2.25 2.25 0 012.248-2.172h3.502v10h-3.757a3.75 3.75 0 00-1.993.574z"/></svg>
       Wiki
     </a>
   </nav>
   <div class="container">
-    <img src="/logo.png" alt="Favicon Fetcher" class="site-logo">
-    <h1>MAFL+ Favicon API</h1>
-    <p class="subtitle">Get the highest resolution favicon for any domain &mdash; or look up a service icon by name.</p>
+    <img src="/logo.svg" alt="FaviconAPI" class="site-logo">
+    <h1>FaviconAPI</h1>
+    <p class="subtitle">Get the highest resolution favicon for any domain - or look up a service icon by name.</p>
 
     <div class="tip">
       <strong><span class="icon">&#9881;</span> Tip</strong>
@@ -1100,7 +1146,7 @@
 
       <!-- selfhst (service-based) -->
       <div class="card" id="selfhst-card" data-card-type="service">
-        <h3>selfh.st/icons (cdn)</h3>
+        <h3>selfh.st/icons</h3>
         <div class="favicon-display" id="selfhst-display" onclick="copyImage(this)">
           <div class="spinner" id="selfhst-spinner" style="display:none"></div>
           <img id="selfhst-img" style="display:none" alt="selfhst icon">
@@ -1117,7 +1163,7 @@
 
       <!-- Dashboard Icons (homarr-labs, service-based) -->
       <div class="card" id="dashboardicons-card" data-card-type="service">
-        <h3>dashboardicons.com (cdn)</h3>
+        <h3>dashboardicons.com</h3>
         <div class="favicon-display" id="dashboardicons-display" onclick="copyImage(this)">
           <div class="spinner" id="dashboardicons-spinner" style="display:none"></div>
           <img id="dashboardicons-img" style="display:none" alt="Dashboard Icons icon">
@@ -1142,7 +1188,11 @@
     </div>
 
     <footer class="page-footer">
-      MAFL+ Favicon API &middot; <a href="https://github.com/R0GGER/maflplus-favicon-api" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://wiki.maflplus.eu/mafl/icons#favicon-api" target="_blank" rel="noopener">Wiki</a>
+      <a class="footer-brand" href="https://faviconapi.com" target="_blank" rel="noopener">FaviconAPI</a>
+      <div class="footer-links">
+        <a href="https://github.com/R0GGER/maflplus" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>MAFL+</a>
+        <a href="https://github.com/R0GGER/maflplus-favicon-api" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>FaviconAPI</a>
+      </div>
     </footer>
   </div>
 
@@ -1153,12 +1203,12 @@
         <button type="button" class="modal-close" onclick="closeToolsOffcanvas()" aria-label="Close">&times;</button>
       </div>
       <div class="offcanvas-body">
-        <p class="offcanvas-intro">Shortcuts to use MAFL+ from your browser address bar or bookmarks bar.</p>
+        <p class="offcanvas-intro">Shortcuts to use FaviconAPI from your browser address bar or bookmarks bar.</p>
 
         <div class="tool-card">
           <div>
             <strong><span class="icon">&#128269;</span> Browser search</strong>
-            <p>Add MAFL+ as a custom search engine and look up favicons straight from your address bar.</p>
+            <p>Add FaviconAPI as a custom search engine and look up favicons straight from your address bar.</p>
           </div>
           <button type="button" class="bookmarklet-btn tool-action" id="search-browser-btn" onclick="openSearchModal()">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
@@ -1173,7 +1223,7 @@
           </div>
           <a class="bookmarklet-btn tool-action" id="bookmarklet-link" href="#" draggable="true" title="Drag me to your bookmarks bar" onclick="bookmarkletClicked(event)">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
-            Mafl+ Favicon Copy
+            FaviconAPI Copy
           </a>
         </div>
       </div>
@@ -1187,7 +1237,7 @@
         <button type="button" class="modal-close" onclick="closeSearchModal()" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-intro">Add MAFL+ as a custom search engine. Use <code>%s</code> as the query placeholder &mdash; your browser replaces it with whatever you type in the address bar.</p>
+        <p class="modal-intro">Add FaviconAPI as a custom search engine. Use <code>%s</code> as the query placeholder &mdash; your browser replaces it with whatever you type in the address bar.</p>
         <div class="search-url-box">
           <code id="search-engine-url">http://localhost:3100/search?q=%s</code>
           <button type="button" class="modal-copy-btn" onclick="copySearchEngineUrl()">Copy URL</button>
@@ -1198,7 +1248,7 @@
             <ol>
               <li>Open <strong>Settings</strong> &rarr; <strong>Search engine</strong> &rarr; <strong>Manage search engines and site search</strong>.</li>
               <li>Click <strong>Add</strong> under Site search.</li>
-              <li>Name: <strong>MAFL+ Favicon</strong></li>
+              <li>Name: <strong>FaviconAPI</strong></li>
               <li>Shortcut: <strong>fav</strong> (optional)</li>
               <li>URL: <a id="search-engine-url-chrome" href="#" target="_blank" rel="noopener"></a></li>
             </ol>
@@ -1208,7 +1258,7 @@
             <ol>
               <li>Open <strong>Settings</strong> &rarr; <strong>Privacy, search, and services</strong> &rarr; <strong>Address bar and search</strong> &rarr; <strong>Manage search engines</strong>.</li>
               <li>Click <strong>Add</strong>.</li>
-              <li>Name: <strong>MAFL+ Favicon</strong></li>
+              <li>Name: <strong>FaviconAPI</strong></li>
               <li>Keyword: <strong>fav</strong> (optional)</li>
               <li>URL: <a id="search-engine-url-edge" href="#" target="_blank" rel="noopener"></a></li>
             </ol>
@@ -1218,7 +1268,7 @@
             <ol>
               <li>Firefox may offer <strong>Add search engine</strong> automatically on this page (OpenSearch).</li>
               <li>Or open <strong>Settings</strong> &rarr; <strong>Search</strong> &rarr; scroll to <strong>Search Shortcuts</strong> &rarr; <strong>Add</strong>.</li>
-              <li>Name: <strong>MAFL+ Favicon</strong></li>
+              <li>Name: <strong>FaviconAPI</strong></li>
               <li>Keyword: <strong>fav</strong> (optional)</li>
               <li>URL: <a id="search-engine-url-firefox" href="#" target="_blank" rel="noopener"></a></li>
             </ol>
@@ -1335,7 +1385,7 @@
 
     function bookmarkletClicked(e) {
       e.preventDefault();
-      alert('Drag this button to your bookmarks bar (the name will auto-fill as "Mafl+ Favicon Copy"). Then click the saved bookmark on any website to copy that site\u2019s favicon URL.\n\nTip: if you copy-paste the URL into a manual "Add bookmark" dialog instead, browsers can\u2019t pre-fill the name for security reasons \u2014 you\u2019ll have to type it yourself.');
+      alert('Drag this button to your bookmarks bar (the name will auto-fill as "FaviconAPI Copy"). Then click the saved bookmark on any website to copy that site\u2019s favicon URL.\n\nTip: if you copy-paste the URL into a manual "Add bookmark" dialog instead, browsers can\u2019t pre-fill the name for security reasons \u2014 you\u2019ll have to type it yourself.');
     }
 
     let currentDomain = '';

@@ -51,16 +51,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Quick-domain chips, `Copy JSON` button, `Clear` button, and `localStorage` persistence of the entered key across page loads.
   - **Endpoint reference** with query-parameter and response-field tables; **Errors table** with colored status pills per code (400, 401, 422, 429, 500); **Authentication** section (Bearer header + `?key=` examples + bundled `scripts/manage-keys.js` CLI usage); **Plans & quotas table** populated at runtime from `/providers`; **CDN route** documentation.
   - **Adaptive UI based on the server's `API_REQUIRE_KEY` setting** - the page fetches `/providers` on load and:
-    - Toggles a green "Public / anonymous" vs. orange "API keys required" badge in the header.
+    - Shows an orange "API keys required" badge in the header when keys are enforced; hides the banner entirely when this instance runs without required keys.
     - Hides the playground key input, the **Authentication** section, the **Plans & quotas** section, and the Errors-section note that only `200` responses count toward the monthly quota when this instance does not require a key.
     - Re-renders the Quick start code samples so the `Authorization: Bearer fa_your_key_here` header (or `?key=...`) is dropped when not relevant - the samples become valid copy-paste calls for the actual running instance.
   - All env-var names (`API_REQUIRE_KEY`, `API_CACHE_TTL`, `PLAN_*_LIMIT`) are kept out of the user-facing copy; runtime/config documentation lives in `README.md` and `.env.example`.
   - **`/providers` extended with `api.{ requireKey, cacheTtl, plans }`** so the docs page can adapt without a separate endpoint. `requireKey` mirrors the `API_REQUIRE_KEY` parsing in `src/apiRoutes.js` (truthy unless the env var equals `false` / `0` / `no` / `off`), `cacheTtl` reflects `API_CACHE_TTL` (default 604800), `plans` exposes `apiStore.PLAN_LIMITS` (`free` / `pro` / `enterprise`).
   - **`/robots.txt`** allow-list extended with `/api` and `/api.html`; **`/sitemap.xml`** includes a new `<url>` entry for `/api` (`<priority>0.8</priority>`, `<changefreq>monthly</changefreq>`) so search engines can index the docs page.
-  - **Homepage `top-nav`** gains an **API** link pointing at `/api`, sitting between the **Tools** offcanvas button and the **MAFL+** external link.
+  - **Homepage `top-nav`** gains an **API** link pointing at `/api`, sitting between the **Tools** offcanvas button and the **Wiki** external link.
 
-- **Consistent top navigation across pages** — `api.html` now has the same top-nav as `index.html`: **Tools** offcanvas (bookmarklet + browser search-engine setup modal), **Home**, **API**, **MAFL+**, **Favicon API** and **Wiki** links. A **Home** menu item (`/`) has been added to both pages, with the current page highlighted via an `active` style.
-- **Page footer on `index.html`** — the homepage now displays the same footer as `api.html` (links to GitHub and Wiki, separated by a subtle top border).
+- **Consistent top navigation across pages** — `api.html` now has the same top-nav as `index.html`: **Tools** offcanvas (bookmarklet + browser search-engine setup modal), **Home**, **API** and **Wiki** links. A **Home** menu item (`/`) has been added to both pages, with the current page highlighted via an `active` style.
+- **Page footer on `index.html` and `api.html`** — both pages share a footer with a **FaviconAPI** brand label and GitHub links to the MAFL+ and FaviconAPI repositories, separated from the main content by a subtle light-gray top border.
+- **Site favicon pack** (`src/public/favicons/`)
+  - Full multi-size favicon set: `favicon.ico`, PNGs at 16/32/48/96 px, `apple-touch-icon.png` (180×180), Android Chrome icons (192/512), `ms-icon-144x144.png`, and a `manifest.json` for PWA install tiles.
+  - Wired into the `<head>` of both `index.html` and `api.html`: sized `rel="icon"` links, shortcut icon, apple-touch-icon, web app manifest link, and `msapplication-TileColor` (`#5b2e7e`) / `msapplication-TileImage` meta tags.
+- **`logo.svg`** — vector site logo for the page header (`<img class="site-logo">`).
 - **v1 API fallback sources** (`src/apiScraper.js`)
   - **Standard well-known paths** — probes `/apple-touch-icon.png`, `/apple-touch-icon-precomposed.png`, `/android-chrome-512x512.png` and `/android-chrome-192x192.png` when HTML does not declare them.
   - **`NxN` size-variant expansion** — HTML candidates matching `…/{N}x{N}.png` (e.g. Reddit's `64x64.png`) are expanded to larger CDN variants (128–512) before probing, reusing `expandSizedVariants` from `src/providers.js`.
@@ -173,18 +177,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Product renamed to FaviconAPI** (was "MAFL+ Favicon API")
+  - User-facing branding updated across `index.html`, `api.html`, `src/index.js` (`/opensearch.xml` `ShortName`, `/robots.txt` comment), `README.md` and the `docs/` guides.
+  - `<title>`, meta `application-name`, Open Graph / Twitter Card tags and JSON-LD `name` now use **FaviconAPI**; `alternateName` is **Favicon API**.
+  - Browser shortcuts renamed: custom search engine **FaviconAPI** (was "MAFL+ Favicon"); bookmarklet **FaviconAPI Copy** (was "Mafl+ Favicon Copy"); Tools offcanvas / search-engine modal copy refers to FaviconAPI instead of MAFL+.
+  - External **MAFL+** project links, Docker service names (`maflplus-favicon-api`) and GitHub repo URLs are unchanged.
+  - Root `favicon.png` and `logo.png` removed from `src/public/`; tab/bookmark icons load from `/favicons/...`. Open Graph / Twitter Card / JSON-LD `image` fields, `/robots.txt` allow-list and `/opensearch.xml` still reference `/logo.png` and `/favicon.png`.
+
+- **Web UI — logo and footer** (`index.html`, `api.html`)
+  - Header logo switched from `/logo.png` to `/logo.svg`.
+  - Footer redesigned: light-gray **FaviconAPI** brand label (Georgia serif, matching the page title) above two subtle GitHub text links — **MAFL+** (`R0GGER/maflplus`) and **FaviconAPI** (`R0GGER/maflplus-favicon-api`) — each with a small GitHub icon. The brand label links to [faviconapi.com](https://faviconapi.com) (opens in a new tab). Replaces the earlier "MAFL+ Favicon API · GitHub · Wiki" line.
+  - Top navigation: **MAFL+** and **Favicon API** GitHub links removed from both pages; **Tools**, **Home**, **API** and **Wiki** remain.
+  - Service icon card titles: `selfh.st/icons (cdn)` → `selfh.st/icons`; `dashboardicons.com (cdn)` → `dashboardicons.com`.
+
 - **Web UI — mobile layout refinements** (`index.html`, `api.html`)
-  - Top navigation at ≤700px shows only **Home**, **API** and **Wiki**; the **Tools** offcanvas button and the **MAFL+** / **Favicon API** GitHub links are hidden so the header stays readable on narrow screens.
+  - Top navigation at ≤700px shows only **Home**, **API** and **Wiki**; the **Tools** offcanvas button is hidden so the header stays readable on narrow screens.
   - Homepage **Try:** quick links reduced on mobile to `github.com`, `proton.me`, `immich`, `jellyfin` (`reddit.com` and `firefox` remain visible on desktop).
-  - API docs page: the public/anonymous mode banner (`#api-mode-banner`, badge + status text) is hidden on mobile.
+  - API docs page: the mode banner (`#api-mode-banner`) is hidden on mobile (≤700px) via CSS; when `API_REQUIRE_KEY=false` it is also hidden on desktop.
   - API playground **Try:** chips reduced on mobile to `github.com`, `proton.me`, `hosthatch.com` (`reddit.com` and `netflix.com` remain visible on desktop).
+
+- **API docs — public mode banner** (`api.html`) — when `API_REQUIRE_KEY=false`, the header no longer shows a green "Public / anonymous" badge; `renderApiMode()` hides the entire `#api-mode-banner` so the docs page does not advertise anonymous access on instances that simply do not require keys.
 
 - **`parseIconCandidatesFromHtml` (`src/providers.js`)** now also reports the `rel` attribute per candidate (`{ href, sizes, type, rel }`), enabling the new `apiScraper.js` to classify candidates by source type (`svg` / `manifest` / `apple-touch-icon` / `png` / `ico`). Existing callers (`buildScraperCandidates` in `fetchScraper`) ignore the new field and are not affected.
 - **`src/providers.js` exports** expanded with `fetchScraperPage`, `parseIconCandidatesFromHtml`, `fetchManifestIcons` and `parseSizesAttr` so the new `apiScraper.js` can reuse the existing HTML/manifest fetch pipeline without duplication. Pre-existing exports are unchanged.
 - **`Dockerfile`** updates for the v1 API:
   - Deps stage installs `python3 make g++` as a virtual `.build-deps` apk package and removes them again after `npm ci`, so native modules like `better-sqlite3` can compile from source on Alpine/musl when no prebuilt binary is available for the target arch; the runtime image is unaffected.
   - Runtime stage now also copies `scripts/` so the `npm run keys:*` CLI is available inside the container (`docker compose exec maflplus-favicon-api npm run keys:create -- ...`).
-- `docker-compose.yml` supports local development via `build: .` (comment out for the published `ghcr.io/r0gger/maflplus-favicon-api:latest` image).
+- **`docker-compose.yml`** defaults to `build: .` for local development; the published `ghcr.io/r0gger/maflplus-favicon-api:latest` image line is commented out (swap to use the pre-built image).
 - Best-pick (`/{domain}`) now scrapes the source site first, falling back to network providers only when scraping does not yield a usable icon — typically improving icon quality and resilience for self-hosted/private domains.
 - **Best-pick (`/{domain}`) races providers in parallel** instead of trying them strictly sequentially.
   - The preferred provider (first in priority order, typically `DEFAULT_PROVIDER`) is started immediately; the remaining providers start after `PICK_HEAD_START_MS` (default 150 ms) — or sooner if the preferred provider has already failed.
