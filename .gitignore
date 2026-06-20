@@ -4,3 +4,4 @@ cache/
 notes.txt
 services.txt
 docker-compose_dev.yml
+/docs
