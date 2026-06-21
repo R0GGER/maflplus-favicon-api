@@ -511,6 +511,31 @@
       grid-template-rows: auto;
     }
 
+    .results-section-divider {
+      grid-column: 1 / -1;
+      display: none;
+      align-items: center;
+      gap: 1rem;
+      margin: 0.35rem 0 0.15rem;
+      color: #b0aaa4;
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      user-select: none;
+    }
+
+    .results-section-divider.visible {
+      display: flex;
+    }
+
+    .results-section-divider::before,
+    .results-section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e0dbd5;
+    }
+
     .card {
       background: #fff;
       border: 1px solid #e0dbd5;
@@ -1224,6 +1249,8 @@
         <div class="meta" id="logodev-meta"></div>
       </div>
 
+      <div class="results-section-divider" id="service-icons-divider" aria-hidden="true">Service icons</div>
+
       <!-- selfhst (service-based) -->
       <div class="card" id="selfhst-card" data-card-type="service">
         <h3>selfh.st/icons</h3>
@@ -1695,6 +1722,15 @@
         if (card.id === 'logodev-card' && !providersConfig.logoDev) return;
         card.style.display = type === 'domain' ? '' : 'none';
       });
+      updateServiceIconsDivider();
+    }
+
+    function updateServiceIconsDivider() {
+      const divider = document.getElementById('service-icons-divider');
+      if (!divider) return;
+      const show = currentMode === 'domain' && selfhstToggle.checked;
+      divider.classList.toggle('visible', show);
+      divider.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
 
     function toggleServiceCards() {
@@ -1706,6 +1742,7 @@
         // In service-only mode, both service cards are always shown.
         selfhstCard.style.display = '';
         dashboardIconsCard.style.display = '';
+        updateServiceIconsDivider();
         return;
       }
 
@@ -1729,6 +1766,7 @@
         dashboardIconsCard.style.display = 'none';
         hint.textContent = '';
       }
+      updateServiceIconsDivider();
     }
 
     function fetchFavicons() {

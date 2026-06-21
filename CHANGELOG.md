@@ -206,6 +206,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API docs page: the mode banner (`#api-mode-banner`) is hidden on mobile (≤700px) via CSS; when `API_REQUIRE_KEY=false` it is also hidden on desktop.
   - API playground **Try:** chips reduced on mobile to `github.com`, `proton.me`, `hosthatch.com` (`reddit.com` and `netflix.com` remain visible on desktop).
 
+- **Web UI — service icons section divider** (`index.html`) — when searching a domain with **Also include service icon lookups** enabled, a subtle light-gray horizontal rule with centred **Service icons** label now separates the favicon provider cards from the selfh.st / dashboardicons.com cards. Hidden for pure service-name searches and when the checkbox is off.
+
 - **API docs — public mode banner** (`api.html`) — when `API_REQUIRE_KEY=false`, the header no longer shows a green "Public / anonymous" badge; `renderApiMode()` hides the entire `#api-mode-banner` so the docs page does not advertise anonymous access on instances that simply do not require keys.
 
 - **`parseIconCandidatesFromHtml` (`src/providers.js`)** now also reports the `rel` attribute per candidate (`{ href, sizes, type, rel }`), enabling the new `apiScraper.js` to classify candidates by source type (`svg` / `manifest` / `apple-touch-icon` / `png` / `ico`). Existing callers (`buildScraperCandidates` in `fetchScraper`) ignore the new field and are not affected.
