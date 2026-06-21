@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Service slug alias resolution** (`src/serviceAliases.js`, `/services/resolve/:service`)
+  - New `GET /services/resolve/:service` endpoint resolves a search term to canonical icon slugs per catalog. Response shape: `{ input, resolved, candidates, providers: { selfhst: { resolved, candidates[] }, dashboardicons: { resolved, candidates[] } } }` where each candidate includes `slug`, `label` and a relevance `score`.
+  - **Provider-specific catalogs** — selfh.st and dashboardicons.com use different slug names for the same product (e.g. `kdrive` → selfh.st `ksuite-kdrive`, dashboardicons `infomaniak-kdrive`; `onedrive` → `microsoft-onedrive`). Resolution is no longer shared across both providers.
+  - **selfh.st index lookup** — loads and caches [selfhst/icons `index.json`](https://github.com/selfhst/icons/blob/main/index.json) (24 h TTL) and matches on `Reference`, display `Name` and `Tags`.
+  - **dashboardicons metadata lookup** — loads and caches [homarr-labs/dashboard-icons `metadata.json`](https://github.com/homarr-labs/dashboard-icons/blob/main/metadata.json) (24 h TTL) and matches on slug keys, `aliases` and trailing slug segments (e.g. `onedrive` → `microsoft-onedrive`).
+  - **Static fallbacks** when metadata has not loaded yet: `onedrive` → `microsoft-onedrive`; `kdrive` → `ksuite-kdrive` (selfh.st) / `infomaniak-kdrive` (dashboardicons).
+  - **`/sh/:service` and `/di/:service`** now iterate provider-specific slug candidates and, when `variant=color` is requested, fall back to `light` then `dark` if the color PNG does not exist upstream.
+  - **Web UI — "Alternative matches" panel** on both service-icon cards: when multiple slug candidates exist for a provider, a grid of clickable tiles (thumbnail, label, slug) is shown below the main preview so users can switch between matches (e.g. pick `ksuite-kdrive` on selfh.st after searching `kdrive`). The search-options hint shows per-provider resolved slugs when they differ.
+  - **`/{domain}/json`** — `endpoints.selfhst` and `endpoints.dashboardicons` now expose the provider-specific resolved slug in `service`, the raw domain label in `query`, and build proxy/source URLs from the resolved slug. v1 scraper fallback tiers and the best-pick cascade use the same per-provider resolution.
+
 - **FaviconAPIs-compatible JSON API** (`/api/v1/favicon` + `/cdn/favicons/{domain}.png`)
   - New `GET /api/v1/favicon?url={website}` endpoint returns a JSON object — `{ url, domain, width, height, format, sourceType, cached, cachedAt }` — instead of the image bytes, modelled on [faviconapis.com/docs](https://www.faviconapis.com/docs). The PNG itself is fetched separately from the returned CDN URL.
   - **Source priority** for icon discovery is `svg` > `manifest` > `apple-touch-icon` > `png` > `selfhst` > `dashboardicons` > `external`. The first source that yields a decodable image wins, and the tag is reported in the `sourceType` response field. Implemented in new `src/apiScraper.js`, reusing existing scraper helpers (`fetchScraperPage`, `parseIconCandidatesFromHtml`, `fetchManifestIcons`, `fetchScraperAsset`) rather than duplicating HTML/manifest fetch logic. Root `/favicon.ico` and other ICO sources are excluded — they contain small frames that upscaled poorly.

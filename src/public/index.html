@@ -663,6 +663,82 @@
       fill: currentColor;
     }
 
+    .service-candidates {
+      margin-top: 1rem;
+      padding-top: 0.9rem;
+      border-top: 1px dashed #d4cdc4;
+    }
+
+    .service-candidates[hidden] { display: none; }
+
+    .service-candidates-title {
+      font-size: 0.78rem;
+      color: #7a6e65;
+      margin: 0 0 0.65rem;
+    }
+
+    .service-candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+      gap: 0.55rem;
+    }
+
+    .candidate-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.55rem 0.4rem;
+      border: 1px solid #ddd6cc;
+      border-radius: 8px;
+      background: #faf8f5;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+
+    .candidate-tile:hover {
+      border-color: #b9a6cc;
+      background: #f3edf8;
+    }
+
+    .candidate-tile.active {
+      border-color: #5b2e7e;
+      background: #efe6f5;
+      box-shadow: inset 0 0 0 1px rgba(91, 46, 126, 0.15);
+    }
+
+    .candidate-thumb {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 52px;
+      padding: 0.25rem;
+      border-radius: 6px;
+      background: #ece6de;
+    }
+
+    .candidate-thumb img {
+      max-width: 100%;
+      max-height: 48px;
+      object-fit: contain;
+    }
+
+    .candidate-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #3d3833;
+      line-height: 1.25;
+    }
+
+    .candidate-slug {
+      font-size: 0.66rem;
+      color: #8a8480;
+      word-break: break-all;
+      line-height: 1.2;
+    }
+
     .card-header {
       display: flex;
       align-items: center;
@@ -1163,6 +1239,10 @@
           <button class="size-btn" data-variant="dark" style="display:none" onclick="switchSelfhstVariant('dark')">Dark</button>
         </div>
         <div class="meta" id="selfhst-meta"></div>
+        <div class="service-candidates" id="selfhst-candidates" hidden>
+          <p class="service-candidates-title">Alternative matches</p>
+          <div class="service-candidates-grid" id="selfhst-candidates-grid"></div>
+        </div>
       </div>
 
       <!-- Dashboard Icons (homarr-labs, service-based) -->
@@ -1180,6 +1260,10 @@
           <button class="size-btn" data-variant="dark" style="display:none" onclick="switchDashboardIconsVariant('dark')">Dark</button>
         </div>
         <div class="meta" id="dashboardicons-meta"></div>
+        <div class="service-candidates" id="dashboardicons-candidates" hidden>
+          <p class="service-candidates-title">Alternative matches</p>
+          <div class="service-candidates-grid" id="dashboardicons-candidates-grid"></div>
+        </div>
       </div>
     </div>
 
@@ -1453,6 +1537,159 @@
         .replace(/^-+|-+$/g, '');
     }
 
+    async function resolveServiceSlugClient(rawSlug) {
+      const slug = deriveServiceSlug(rawSlug);
+      if (!slug) return null;
+      const fallback = {
+        input: slug,
+        resolved: slug,
+        providers: {
+          selfhst: { resolved: slug, candidates: [{ slug, label: slug }] },
+          dashboardicons: { resolved: slug, candidates: [{ slug, label: slug }] },
+        },
+      };
+      try {
+        const res = await fetch(`${location.origin}/services/resolve/${encodeURIComponent(slug)}`);
+        if (!res.ok) return fallback;
+        return await res.json();
+      } catch {
+        return fallback;
+      }
+    }
+
+    function formatServiceHint(resolveData) {
+      const input = resolveData?.input || '';
+      const sh = resolveData?.providers?.selfhst?.resolved;
+      const di = resolveData?.providers?.dashboardicons?.resolved;
+      if (sh && di && sh !== di) {
+        return `\u00a0\u2192 selfh.st: "${sh}", dashboardicons: "${di}"`;
+      }
+      const resolved = sh || di || resolveData?.resolved || input;
+      if (!resolved || resolved === input) return `\u00a0\u2192 service name: "${input}"`;
+      return `\u00a0\u2192 "${input}" resolved as "${resolved}"`;
+    }
+
+    function serviceProxyPath(provider, slug, variant) {
+      const base = provider === 'selfhst' ? `/sh/${slug}` : `/di/${slug}`;
+      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    }
+
+    function probeServiceIcon(provider, slug) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const variants = ['color', 'light', 'dark'];
+        let index = 0;
+
+        function tryNext() {
+          if (index >= variants.length) {
+            resolve(null);
+            return;
+          }
+          const variant = variants[index++];
+          img.onload = () => resolve({ variant, url: serviceProxyPath(provider, slug, variant) });
+          img.onerror = tryNext;
+          img.src = serviceProxyPath(provider, slug, variant);
+        }
+
+        tryNext();
+      });
+    }
+
+    function renderServiceCandidates(provider, candidates, activeSlug) {
+      const panel = document.getElementById(`${provider}-candidates`);
+      const grid = document.getElementById(`${provider}-candidates-grid`);
+      if (!panel || !grid) return;
+
+      const list = (candidates || []).filter((candidate) => candidate && candidate.slug);
+      const unique = [];
+      const seen = new Set();
+      for (const candidate of list) {
+        if (seen.has(candidate.slug)) continue;
+        seen.add(candidate.slug);
+        unique.push(candidate);
+      }
+
+      const showAlternatives = unique.length > 1
+        || (unique.length === 1 && unique[0].slug !== activeSlug);
+
+      if (!showAlternatives) {
+        panel.hidden = true;
+        grid.innerHTML = '';
+        return;
+      }
+
+      panel.hidden = false;
+      grid.innerHTML = unique.map((candidate) => {
+        const slug = escapeHtml(candidate.slug);
+        const label = escapeHtml(candidate.label || candidate.slug);
+        const active = candidate.slug === activeSlug ? ' active' : '';
+        return `<button type="button" class="candidate-tile${active}" data-provider="${provider}" data-slug="${slug}">
+          <span class="candidate-thumb"><img alt="" loading="lazy"></span>
+          <span class="candidate-label">${label}</span>
+          <span class="candidate-slug">${slug}</span>
+        </button>`;
+      }).join('');
+
+      grid.querySelectorAll('.candidate-tile').forEach((tile) => {
+        tile.addEventListener('click', () => {
+          selectServiceCandidate(provider, tile.dataset.slug);
+        });
+        probeServiceIcon(provider, tile.dataset.slug).then((hit) => {
+          if (!hit) return;
+          const img = tile.querySelector('img');
+          if (img) img.src = hit.url;
+        });
+      });
+    }
+
+    function selectServiceCandidate(provider, slug) {
+      if (!slug) return;
+      if (provider === 'selfhst') {
+        currentSelfhstSlug = slug;
+        switchSelfhstVariant('color');
+        document.querySelectorAll('#selfhst-candidates-grid .candidate-tile').forEach((tile) => {
+          tile.classList.toggle('active', tile.dataset.slug === slug);
+        });
+        return;
+      }
+
+      currentDashboardIconsSlug = slug;
+      switchDashboardIconsVariant('color');
+      document.querySelectorAll('#dashboardicons-candidates-grid .candidate-tile').forEach((tile) => {
+        tile.classList.toggle('active', tile.dataset.slug === slug);
+      });
+    }
+
+    function clearServiceCandidates() {
+      ['selfhst', 'dashboardicons'].forEach((provider) => {
+        const panel = document.getElementById(`${provider}-candidates`);
+        const grid = document.getElementById(`${provider}-candidates-grid`);
+        if (panel) panel.hidden = true;
+        if (grid) grid.innerHTML = '';
+      });
+    }
+
+    function startServiceIconLoads(resolveData, hideOnError) {
+      const selfhstData = resolveData.providers?.selfhst || { resolved: resolveData.resolved, candidates: [] };
+      const dashboardData = resolveData.providers?.dashboardicons || { resolved: resolveData.resolved, candidates: [] };
+
+      currentSelfhstSlug = selfhstData.resolved;
+      currentSelfhstVariant = 'color';
+      resetSelfhstVariantButtons();
+      setActiveVariant('selfhst-variants', 'color');
+      loadSelfhst(selfhstData.resolved, 'color', { hideOnError });
+      probeAndShowSelfhstVariants(selfhstData.resolved);
+      renderServiceCandidates('selfhst', selfhstData.candidates, selfhstData.resolved);
+
+      currentDashboardIconsSlug = dashboardData.resolved;
+      currentDashboardIconsVariant = 'color';
+      resetDashboardIconsVariantButtons();
+      setActiveVariant('dashboardicons-variants', 'color');
+      loadDashboardIcons(dashboardData.resolved, 'color', { hideOnError });
+      probeAndShowDashboardIconsVariants(dashboardData.resolved);
+      renderServiceCandidates('dashboardicons', dashboardData.candidates, dashboardData.resolved);
+    }
+
     function showCardsByType(type) {
       document.querySelectorAll('[data-card-type="domain"]').forEach((card) => {
         if (card.id === 'logodev-card' && !providersConfig.logoDev) return;
@@ -1477,21 +1714,14 @@
         dashboardIconsCard.style.display = '';
         if (currentMode === 'domain' && currentDomain) {
           const slug = deriveServiceSlug(currentDomain);
-          hint.textContent = slug ? `\u00a0\u2014 as "${slug}"` : '';
           if (slug) {
-            currentSelfhstSlug = slug;
-            currentSelfhstVariant = 'color';
-            resetSelfhstVariantButtons();
-            setActiveVariant('selfhst-variants', 'color');
-            loadSelfhst(slug, 'color', { hideOnError: true });
-            probeAndShowSelfhstVariants(slug);
-
-            currentDashboardIconsSlug = slug;
-            currentDashboardIconsVariant = 'color';
-            resetDashboardIconsVariantButtons();
-            setActiveVariant('dashboardicons-variants', 'color');
-            loadDashboardIcons(slug, 'color', { hideOnError: true });
-            probeAndShowDashboardIconsVariants(slug);
+            resolveServiceSlugClient(currentDomain).then((resolveData) => {
+              if (currentMode !== 'domain' || slug !== deriveServiceSlug(currentDomain)) return;
+              hint.textContent = formatServiceHint(resolveData);
+              startServiceIconLoads(resolveData, true);
+            });
+          } else {
+            hint.textContent = '';
           }
         }
       } else {
@@ -1518,6 +1748,7 @@
       currentMode = 'domain';
       currentDomain = domain;
       currentService = '';
+      clearServiceCandidates();
       currentGoogleSize = 128;
       currentFaviconkitSize = 128;
 
@@ -1554,21 +1785,14 @@
         selfhstCard.style.display = '';
         dashboardIconsCard.style.display = '';
         const slug = deriveServiceSlug(domain);
-        selfhstHint.textContent = slug ? `\u00a0\u2192 service name: "${slug}"` : '';
         if (slug) {
-          currentSelfhstSlug = slug;
-          currentSelfhstVariant = 'color';
-          resetSelfhstVariantButtons();
-          setActiveVariant('selfhst-variants', 'color');
-          loadSelfhst(slug, 'color', { hideOnError: true });
-          probeAndShowSelfhstVariants(slug);
-
-          currentDashboardIconsSlug = slug;
-          currentDashboardIconsVariant = 'color';
-          resetDashboardIconsVariantButtons();
-          setActiveVariant('dashboardicons-variants', 'color');
-          loadDashboardIcons(slug, 'color', { hideOnError: true });
-          probeAndShowDashboardIconsVariants(slug);
+          resolveServiceSlugClient(domain).then((resolveData) => {
+            if (currentMode !== 'domain' || currentDomain !== domain) return;
+            selfhstHint.textContent = formatServiceHint(resolveData);
+            startServiceIconLoads(resolveData, true);
+          });
+        } else {
+          selfhstHint.textContent = '';
         }
       } else {
         selfhstCard.style.display = 'none';
@@ -1577,15 +1801,19 @@
       }
     }
 
-    function runServiceSearch(rawSlug) {
+    async function runServiceSearch(rawSlug) {
       const slug = deriveServiceSlug(rawSlug);
       if (!slug) return;
 
+      const resolveData = await resolveServiceSlugClient(rawSlug);
+      if (!resolveData) return;
+
       currentMode = 'service';
-      currentService = slug;
+      currentService = resolveData.providers?.selfhst?.resolved || resolveData.resolved;
       currentDomain = '';
 
-      document.getElementById('api-example').textContent = `${location.origin}/sh/${slug}`;
+      document.getElementById('api-example').textContent =
+        `${location.origin}/sh/${encodeURIComponent(currentService)}`;
       document.getElementById('json-button-wrap').classList.remove('visible');
       document.getElementById('results').classList.add('visible');
 
@@ -1595,21 +1823,9 @@
       const dashboardIconsCard = document.getElementById('dashboardicons-card');
       selfhstCard.style.display = '';
       dashboardIconsCard.style.display = '';
-      document.getElementById('selfhst-hint').textContent = `\u00a0\u2192 service-only lookup`;
+      document.getElementById('selfhst-hint').textContent = formatServiceHint(resolveData);
 
-      currentSelfhstSlug = slug;
-      currentSelfhstVariant = 'color';
-      resetSelfhstVariantButtons();
-      setActiveVariant('selfhst-variants', 'color');
-      loadSelfhst(slug, 'color', { hideOnError: false });
-      probeAndShowSelfhstVariants(slug);
-
-      currentDashboardIconsSlug = slug;
-      currentDashboardIconsVariant = 'color';
-      resetDashboardIconsVariantButtons();
-      setActiveVariant('dashboardicons-variants', 'color');
-      loadDashboardIcons(slug, 'color', { hideOnError: false });
-      probeAndShowDashboardIconsVariants(slug);
+      startServiceIconLoads(resolveData, false);
     }
 
     function loadGoogle(domain, size) {

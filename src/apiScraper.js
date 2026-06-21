@@ -7,6 +7,7 @@ const {
   expandSizedVariants,
   PROVIDERS,
 } = require('./providers');
+const { resolveServiceSlugForProviderSync } = require('./serviceAliases');
 const cheerio = require('cheerio');
 const sharp = require('sharp');
 
@@ -218,14 +219,16 @@ async function gatherCandidates(domain) {
   // Service-name icon packs (domain label → slug, e.g. google.com → google).
   const serviceSlug = serviceSlugFromDomain(domain);
   if (serviceSlug) {
+    const selfhstSlug = resolveServiceSlugForProviderSync(serviceSlug, 'selfhst');
+    const dashboardSlug = resolveServiceSlugForProviderSync(serviceSlug, 'dashboardicons');
     buckets.selfhst.push({
-      href: PROVIDERS.selfhst(serviceSlug),
+      href: PROVIDERS.selfhst(selfhstSlug),
       sizes: '256x256',
       type: 'image/png',
       rel: 'selfhst',
     });
     buckets.dashboardicons.push({
-      href: PROVIDERS.dashboardIcons(serviceSlug),
+      href: PROVIDERS.dashboardIcons(dashboardSlug),
       sizes: '256x256',
       type: 'image/png',
       rel: 'dashboardicons',

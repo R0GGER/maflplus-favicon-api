@@ -25,6 +25,10 @@ const {
   PROVIDERS,
 } = require('./providers');
 const { pickBest, fetchWithCache } = require('./bestPick');
+const {
+  resolveServiceSlugForProviderSync,
+  resolveServiceMatches,
+} = require('./serviceAliases');
 const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
@@ -433,6 +437,20 @@ app.get('/s/:domain', async (req, res) => {
   }
 });
 
+// Resolve a service search term to canonical icon slug(s): /services/resolve/:service
+app.get('/services/resolve/:service', async (req, res) => {
+  const service = extractService(req.params.service);
+  if (!service) return res.status(400).json({ error: 'Invalid service name.' });
+
+  try {
+    const matches = await resolveServiceMatches(service);
+    res.json(matches);
+  } catch (err) {
+    console.error('Service resolve error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+});
+
 // selfhst icons (service-name based): /sh/:service[?variant=color|light|dark]
 app.get('/sh/:service', async (req, res) => {
   const service = extractService(req.params.service);
@@ -554,53 +572,68 @@ app.get('/:domain/json', async (req, res) => {
   const serviceSlug = (() => {
     const first = domain.toLowerCase().split('.')[0];
     const slug = first.replace(/[^a-z0-9._-]/g, '');
-    return SERVICE_SLUG_RE.test(slug) ? slug : null;
+    if (!SERVICE_SLUG_RE.test(slug)) return null;
+    return slug;
   })();
 
-  const serviceSlugEncoded = serviceSlug ? encodeURIComponent(serviceSlug) : null;
-  const selfhst = serviceSlug
-    ? {
-        service: serviceSlug,
-        proxy: `${host}/sh/${serviceSlugEncoded}`,
-        source: PROVIDERS.selfhst(serviceSlug),
-        variants: {
-          color: {
-            proxy: `${host}/sh/${serviceSlugEncoded}`,
-            source: PROVIDERS.selfhst(serviceSlug, 'color'),
-          },
-          light: {
-            proxy: `${host}/sh/${serviceSlugEncoded}?variant=light`,
-            source: PROVIDERS.selfhst(serviceSlug, 'light'),
-          },
-          dark: {
-            proxy: `${host}/sh/${serviceSlugEncoded}?variant=dark`,
-            source: PROVIDERS.selfhst(serviceSlug, 'dark'),
-          },
-        },
-      }
-    : { service: null, proxy: null, source: null, variants: null };
+  const selfhstServiceSlug = serviceSlug
+    ? resolveServiceSlugForProviderSync(serviceSlug, 'selfhst')
+    : null;
+  const dashboardServiceSlug = serviceSlug
+    ? resolveServiceSlugForProviderSync(serviceSlug, 'dashboardicons')
+    : null;
 
-  const dashboardicons = serviceSlug
+  const selfhstSlugEncoded = selfhstServiceSlug
+    ? encodeURIComponent(selfhstServiceSlug)
+    : null;
+  const dashboardSlugEncoded = dashboardServiceSlug
+    ? encodeURIComponent(dashboardServiceSlug)
+    : null;
+  const selfhst = selfhstServiceSlug
     ? {
-        service: serviceSlug,
-        proxy: `${host}/di/${serviceSlugEncoded}`,
-        source: PROVIDERS.dashboardIcons(serviceSlug),
+        service: selfhstServiceSlug,
+        query: serviceSlug,
+        proxy: `${host}/sh/${selfhstSlugEncoded}`,
+        source: PROVIDERS.selfhst(selfhstServiceSlug),
         variants: {
           color: {
-            proxy: `${host}/di/${serviceSlugEncoded}`,
-            source: PROVIDERS.dashboardIcons(serviceSlug, 'color'),
+            proxy: `${host}/sh/${selfhstSlugEncoded}`,
+            source: PROVIDERS.selfhst(selfhstServiceSlug, 'color'),
           },
           light: {
-            proxy: `${host}/di/${serviceSlugEncoded}?variant=light`,
-            source: PROVIDERS.dashboardIcons(serviceSlug, 'light'),
+            proxy: `${host}/sh/${selfhstSlugEncoded}?variant=light`,
+            source: PROVIDERS.selfhst(selfhstServiceSlug, 'light'),
           },
           dark: {
-            proxy: `${host}/di/${serviceSlugEncoded}?variant=dark`,
-            source: PROVIDERS.dashboardIcons(serviceSlug, 'dark'),
+            proxy: `${host}/sh/${selfhstSlugEncoded}?variant=dark`,
+            source: PROVIDERS.selfhst(selfhstServiceSlug, 'dark'),
           },
         },
       }
-    : { service: null, proxy: null, source: null, variants: null };
+    : { service: null, query: null, proxy: null, source: null, variants: null };
+
+  const dashboardicons = dashboardServiceSlug
+    ? {
+        service: dashboardServiceSlug,
+        query: serviceSlug,
+        proxy: `${host}/di/${dashboardSlugEncoded}`,
+        source: PROVIDERS.dashboardIcons(dashboardServiceSlug),
+        variants: {
+          color: {
+            proxy: `${host}/di/${dashboardSlugEncoded}`,
+            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'color'),
+          },
+          light: {
+            proxy: `${host}/di/${dashboardSlugEncoded}?variant=light`,
+            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'light'),
+          },
+          dark: {
+            proxy: `${host}/di/${dashboardSlugEncoded}?variant=dark`,
+            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'dark'),
+          },
+        },
+      }
+    : { service: null, query: null, proxy: null, source: null, variants: null };
 
   res.set('Cache-Control', CACHE_CONTROL);
   res.json({

@@ -405,16 +405,36 @@ async function fetchLogoDev(domain) {
   return result ? { ...result, provider: 'logodev' } : null;
 }
 
+const {
+  getSelfhstSlugCandidates,
+  getDashboardIconsSlugCandidates,
+} = require('./serviceAliases');
+
+async function fetchServiceIcon(buildUrl, getCandidates, service, variant, provider) {
+  const candidates = await getCandidates(service);
+  const variants = variant === 'color' ? ['color', 'light', 'dark'] : [variant];
+
+  for (const slug of candidates) {
+    for (const v of variants) {
+      const result = await fetchFavicon(buildUrl(slug, v));
+      if (result) return { ...result, provider, service: slug, variant: v };
+    }
+  }
+  return null;
+}
+
 async function fetchSelfhst(service, variant = 'color') {
-  const url = PROVIDERS.selfhst(service, variant);
-  const result = await fetchFavicon(url);
-  return result ? { ...result, provider: 'selfhst' } : null;
+  return fetchServiceIcon(PROVIDERS.selfhst, getSelfhstSlugCandidates, service, variant, 'selfhst');
 }
 
 async function fetchDashboardIcons(service, variant = 'color') {
-  const url = PROVIDERS.dashboardIcons(service, variant);
-  const result = await fetchFavicon(url);
-  return result ? { ...result, provider: 'dashboardicons' } : null;
+  return fetchServiceIcon(
+    PROVIDERS.dashboardIcons,
+    getDashboardIconsSlugCandidates,
+    service,
+    variant,
+    'dashboardicons'
+  );
 }
 
 // Parse "16x16" / "32x32 64x64" sizes attribute, return largest square dimension or 0.
