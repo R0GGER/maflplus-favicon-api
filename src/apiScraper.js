@@ -10,7 +10,6 @@ const {
 const { resolveServiceSlugForProviderSync } = require('./serviceAliases');
 const { serviceSlugFromDomain } = require('./serviceSlugFromDomain');
 const cheerio = require('cheerio');
-const sharp = require('sharp');
 
 // FaviconAPIs source priority. The first tier to produce a usable icon wins;
 // within a tier we try the largest declared size first.
@@ -29,7 +28,7 @@ const SOURCE_TYPES = [
   'external',
 ];
 
-const { MIN_SOURCE_SIZE } = require('./imageNormalize');
+const { MIN_SOURCE_SIZE, readImageDimensions } = require('./imageNormalize');
 
 // Well-known paths most sites serve even without HTML link tags.
 const STANDARD_FALLBACKS = [
@@ -96,18 +95,15 @@ async function tryCandidate(href, referer) {
     sourceWidth = MIN_SOURCE_SIZE + 1;
     sourceHeight = MIN_SOURCE_SIZE + 1;
   } else {
-    try {
-      const meta = await sharp(result.buffer).metadata();
-      sourceWidth = meta.width || 0;
-      sourceHeight = meta.height || 0;
-      if (
-        sourceWidth < MIN_SOURCE_SIZE ||
-        sourceHeight < MIN_SOURCE_SIZE
-      ) {
-        return null;
-      }
-    } catch {
-      // If sharp can't read metadata, let downstream normalization handle it.
+    const dims = await readImageDimensions(result.buffer, {
+      contentType: result.contentType,
+      url: href,
+    });
+    if (!dims) return null;
+    sourceWidth = dims.width;
+    sourceHeight = dims.height;
+    if (sourceWidth < MIN_SOURCE_SIZE || sourceHeight < MIN_SOURCE_SIZE) {
+      return null;
     }
   }
 

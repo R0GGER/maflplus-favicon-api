@@ -64,6 +64,77 @@ function pickLargestIcoFrame(frames) {
   return best;
 }
 
+async function icoFrameToPng(frame) {
+  let input;
+  if (frame.type === 'png') {
+    input = sharp(Buffer.from(frame.data));
+  } else {
+    input = sharp(Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), {
+      raw: { width: frame.width, height: frame.height, channels: 4 },
+    });
+  }
+  return input.png().toBuffer();
+}
+
+// Sharp cannot read many ICO files (BMP frames). Use decode-ico as fallback.
+async function readImageDimensions(buffer, { contentType = '', url = '' } = {}) {
+  if (!buffer || buffer.length === 0) return null;
+
+  try {
+    const meta = await sharp(buffer).metadata();
+    const width = meta.width || 0;
+    const height = meta.height || 0;
+    if (width > 0 && height > 0) {
+      return {
+        width,
+        height,
+        format: meta.format ? String(meta.format).toLowerCase() : null,
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const hint = `${contentType} ${url}`.toLowerCase();
+  if (looksLikeIco(buffer) || hint.includes('ico')) {
+    try {
+      const frame = pickLargestIcoFrame(decodeIco(buffer));
+      if (frame) {
+        return { width: frame.width, height: frame.height, format: 'ico' };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return null;
+}
+
+// Convert ICO (and other non-browser-friendly formats) to PNG at native size
+// for display in <img> tags. Does not enforce MIN_SOURCE_SIZE.
+async function toDisplayPng(buffer, { contentType = '', url = '' } = {}) {
+  if (!buffer || buffer.length === 0) {
+    throw new Error('Empty image buffer');
+  }
+
+  const hint = `${contentType} ${url}`.toLowerCase();
+  const isIco = looksLikeIco(buffer) || hint.includes('ico');
+
+  if (isIco) {
+    const frame = pickLargestIcoFrame(decodeIco(buffer));
+    if (!frame) throw new Error('ICO contained no decodable frames');
+    const png = await icoFrameToPng(frame);
+    return {
+      buffer: png,
+      contentType: 'image/png',
+      width: frame.width,
+      height: frame.height,
+    };
+  }
+
+  return { buffer, contentType: contentType || 'application/octet-stream' };
+}
+
 async function rasterizeIco(buffer) {
   const frames = decodeIco(buffer);
   const frame = pickLargestIcoFrame(frames);
@@ -157,6 +228,9 @@ const toPng256 = toPng;
 module.exports = {
   toPng256,
   toPng,
+  toDisplayPng,
+  readImageDimensions,
+  looksLikeIco,
   rasterizeSvgToSize,
   TARGET_SIZE,
   MIN_SOURCE_SIZE,

@@ -22,7 +22,32 @@ const DOMAIN_ICON_TAGS = [
   { domain: 'outlook.office.com', iconTag: 'microsoft-outlook' },
   { domain: 'teams.microsoft.com', iconTag: 'microsoft-teams' },
   { domain: 'onedrive.live.com', iconTag: 'microsoft-onedrive' },
+  { domain: 'excel.cloud.microsoft.com', iconTag: 'microsoft-excel' },
+  { domain: 'excel.office.com', iconTag: 'microsoft-excel' },
+  { domain: 'powerpoint.cloud.microsoft.com', iconTag: 'microsoft-powerpoint' },
+  { domain: 'powerpoint.office.com', iconTag: 'microsoft-powerpoint' },
+  { domain: 'word.cloud.microsoft.com', iconTag: 'microsoft-word' },
+  { domain: 'word.office.com', iconTag: 'microsoft-word' },
+  { domain: 'onenote.com', iconTag: 'microsoft-onenote' },
+  { domain: 'onenote.office.com', iconTag: 'microsoft-onenote' },
+  { domain: 'project.office.com', iconTag: 'microsoft-project' },
+  { domain: 'forms.office.com', iconTag: 'microsoft-forms' },
   
+  // Microsoft Admin Center
+  { domain: 'admin.cloud.microsoft.com', iconTag: 'admin-center' },
+  { domain: 'azure.microsoft.com', iconTag: 'microsoft-azure' },
+  { domain: 'intune.microsoft.com', iconTag: 'microsoft-intune' },
+
+  // Ksuite
+  { domain: 'calendar.infomaniak.com', iconTag: 'ksuite-calendar' },
+  { domain: 'chk.infomaniak.com', iconTag: 'ksuite-chk' },
+  { domain: 'contacts.infomaniak.com', iconTag: 'ksuite-contacts' },
+  { domain: 'kchat.infomaniak.com', iconTag: 'ksuite-kchat' },
+  { domain: 'drive.infomaniak.com', iconTag: 'ksuite-kdrive' },
+  { domain: 'kmeet.infomaniak.com', iconTag: 'ksuite-kmeet' },
+  { domain: 'mail.infomaniak.com', iconTag: 'ksuite-kmail' },
+  { domain: 'kpaste.infomaniak.com', iconTag: 'ksuite-kpaste' },
+
   // Proton
   { domain: 'proton.me', iconTag: 'proton' },
   { domain: 'protonmail.com', iconTag: 'protonmail' },
@@ -40,17 +65,22 @@ const DOMAIN_ICON_TAGS = [
   { domain: 'yahoo.com', iconTag: 'yahoo' },
   { domain: 'hotmail.com', iconTag: 'outlook' },
   { domain: 'live.com', iconTag: 'outlook' },
+
+  // Amazon
+  { domain: 'amazon.com', iconTag: 'amazon' },
+  { domain: 'amazon.co.uk', iconTag: 'amazon' },
+  { domain: 'amazon.de', iconTag: 'amazon' },
+  { domain: 'amazon.fr', iconTag: 'amazon' },
+  { domain: 'amazon.it', iconTag: 'amazon' },
+  { domain: 'amazon.es', iconTag: 'amazon' },
+  { domain: 'amazon.com.br', iconTag: 'amazon' },
+  { domain: 'amazon.com.mx', iconTag: 'amazon' },
+  { domain: 'amazon.com.au', iconTag: 'amazon' },
+
+  // Albert Heijn
+  { domain: 'ah.nl', iconTag: 'albert-heijn' },
+  { domain: 'www.ah.nl', iconTag: 'albert-heijn' },  
   
-  // password managers
-  { domain: 'lastpass.com', iconTag: 'lastpass' },
-  { domain: 'dashlane.com', iconTag: 'dashlane' },
-  { domain: '1password.com', iconTag: '1password' },
-  { domain: 'keeper.com', iconTag: 'keeper' },
-  { domain: 'bitwarden.com', iconTag: 'bitwarden' },
-  { domain: 'passbolt.com', iconTag: 'passbolt' },
-  { domain: 'keepassxc.org', iconTag: 'keepassxc' },
-  { domain: 'keepass.info', iconTag: 'keepass' },
-  { domain: 'aliasvault.com', iconTag: 'aliasvault' },
   
 ];
 

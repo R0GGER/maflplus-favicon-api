@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const sharp = require('sharp');
-const { rasterizeSvgToSize } = require('./imageNormalize');
+const { rasterizeSvgToSize, readImageDimensions, toDisplayPng } = require('./imageNormalize');
 const { LRUCache } = require('lru-cache');
 const { upstreamFetch, ipv4Dispatcher, ipv4Http1Dispatcher } = require('./upstreamFetch');
 
@@ -248,15 +248,15 @@ async function probeScraperCandidates(candidates, referer, limit = 16) {
     const result = await fetchScraperAsset(candidate.href, referer);
     if (!result) return null;
 
-    try {
-      const meta = await sharp(result.buffer).metadata();
-      const width = Math.min(meta.width || 0, meta.height || 0);
-      const format = meta.format || '';
-      if (width <= 0) return null;
-      return { result, width, format };
-    } catch {
-      return null;
-    }
+    const dims = await readImageDimensions(result.buffer, {
+      contentType: result.contentType,
+      url: candidate.href,
+    });
+    if (!dims || dims.width <= 0) return null;
+
+    const width = Math.min(dims.width, dims.height || dims.width);
+    const format = dims.format || '';
+    return { result, width, format };
   }
 
   // Variant groups: process groups in parallel, but keep the sequential
@@ -288,7 +288,22 @@ async function probeScraperCandidates(candidates, referer, limit = 16) {
   const looseHits = await runInBatches(loose, SCRAPER_PROBE_BATCH_SIZE, probeOne);
   for (const hit of looseHits) updateBest(hit.result, hit.width, hit.format);
 
-  return best;
+  if (!best) return null;
+
+  try {
+    const displayed = await toDisplayPng(best.buffer, {
+      contentType: best.contentType,
+      url: best.url,
+    });
+    return {
+      ...best,
+      buffer: displayed.buffer,
+      contentType: displayed.contentType,
+      provider: 'scraper',
+    };
+  } catch {
+    return best;
+  }
 }
 
 const PROVIDERS = {
@@ -672,21 +687,20 @@ function deriveHintCandidates(domain, knownUrls = []) {
 async function probeIconMetadata(href, referer) {
   const result = await fetchScraperAsset(href, referer);
   if (!result) return null;
-  try {
-    const meta = await sharp(result.buffer).metadata();
-    const width = meta.width || 0;
-    const height = meta.height || 0;
-    if (width <= 0 || height <= 0) return null;
-    return {
-      url: href,
-      width,
-      height,
-      format: meta.format ? String(meta.format).toLowerCase() : null,
-      bytes: result.buffer.length,
-    };
-  } catch {
-    return null;
-  }
+
+  const dims = await readImageDimensions(result.buffer, {
+    contentType: result.contentType,
+    url: href,
+  });
+  if (!dims || dims.width <= 0 || dims.height <= 0) return null;
+
+  return {
+    url: href,
+    width: dims.width,
+    height: dims.height,
+    format: dims.format ? String(dims.format).toLowerCase() : null,
+    bytes: result.buffer.length,
+  };
 }
 
 // Returns the merged + sorted list of every icon we can find for `domain`:

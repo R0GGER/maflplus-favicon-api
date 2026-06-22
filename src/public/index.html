@@ -1615,8 +1615,12 @@
     }
 
     async function resolveServiceSlugClient(rawSlug) {
+      const host = rawSlug.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0];
       const slug = deriveServiceSlug(rawSlug);
       if (!slug) return null;
+      // Pass full hostname so /services/resolve can apply domainIconTags.js overrides
+      // (e.g. word.office.com → microsoft-word, not client heuristic office-word).
+      const resolveParam = host.includes('.') ? host : slug;
       const fallback = {
         input: slug,
         resolved: slug,
@@ -1627,7 +1631,7 @@
         },
       };
       try {
-        const res = await fetch(`${location.origin}/services/resolve/${encodeURIComponent(slug)}`);
+        const res = await fetch(`${location.origin}/services/resolve/${encodeURIComponent(resolveParam)}`);
         if (!res.ok) return fallback;
         return await res.json();
       } catch {
@@ -2460,6 +2464,29 @@
       };
       imgEl.onerror = () => {
         if (currentScraperIdx !== idx) return;
+        if (isPrimary && icon.url) {
+          const fallbackEl = new Image();
+          fallbackEl.crossOrigin = 'anonymous';
+          const assetProxy = `/s-asset?url=${encodeURIComponent(icon.url)}`;
+          fallbackEl.onload = () => {
+            if (currentScraperIdx !== idx) return;
+            img.src = fallbackEl.src;
+            img.style.display = 'block';
+            spinner.style.display = 'none';
+            display.dataset.proxyUrl = `${location.origin}${assetProxy}`;
+            writeMeta(
+              icon.width || fallbackEl.naturalWidth || 0,
+              icon.height || fallbackEl.naturalHeight || 0
+            );
+          };
+          fallbackEl.onerror = () => {
+            if (currentScraperIdx !== idx) return;
+            spinner.style.display = 'none';
+            writeMeta(icon.width || 0, icon.height || 0);
+          };
+          fallbackEl.src = `${assetProxy}&_=${Date.now()}`;
+          return;
+        }
         spinner.style.display = 'none';
         writeMeta(icon.width || 0, icon.height || 0);
       };

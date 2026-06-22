@@ -31,6 +31,7 @@ const {
   resolveServiceMatches,
 } = require('./serviceAliases');
 const { serviceSlugFromDomain, listDomainIconTags } = require('./serviceSlugFromDomain');
+const { toDisplayPng } = require('./imageNormalize');
 const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
@@ -411,10 +412,23 @@ app.get('/s-asset', async (req, res) => {
   const referer = `${parsed.protocol}//${parsed.hostname}/`;
 
   try {
-    const entry = await fetchWithCache('asset', hash, null, async () => {
+    const entry = await fetchWithCache('asset-v2', hash, null, async () => {
       const result = await fetchScraperAsset(target, referer);
       if (!result) return null;
-      return { ...result, provider: 'asset' };
+      try {
+        const displayed = await toDisplayPng(result.buffer, {
+          contentType: result.contentType,
+          url: target,
+        });
+        return {
+          ...result,
+          buffer: displayed.buffer,
+          contentType: displayed.contentType,
+          provider: 'asset',
+        };
+      } catch {
+        return { ...result, provider: 'asset' };
+      }
     });
     if (!entry) return res.status(502).json({ error: 'Could not fetch asset.' });
     sendFavicon(res, entry);
