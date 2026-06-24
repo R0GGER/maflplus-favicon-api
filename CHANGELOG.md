@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **App-name lookup on the best-pick route** (`GET /{app-name}`)
+  - Paths without a dot (e.g. `/jellyfin`, `/firefox`, `/immich`) are treated as **service names**, not domains. Races selfh.st, dashboardicons and lobehub in parallel via new `pickBestService()` in `src/bestPick.js` (same head-start / `DEFAULT_PROVIDER` behaviour as `/{domain}`).
+  - **`GET /{app-name}/json`** — discovery JSON for service names (same catalog shape as domain JSON: `best`, `resolve`, `selfhst`, `dashboardicons`, `lobehub`). Example: `/jellyfin/json`.
+  - Domain lookups are unchanged: `GET /github.com` still races website favicon providers.
+
 - **Domain → icon-tag table** (`src/domainIconTags.js`)
   - Editable list of explicit `{ domain, iconTag }` rows (e.g. `drive.google.com` → `google-drive`) used when v1 API scraper fallbacks and best-pick service-icon providers need a catalog slug. Lookup runs **before** automatic rules in `serviceSlugFromDomain.js`; extend the array to override or pin mappings without code changes elsewhere.
   - `GET /domain-icon-tags` returns `{ entries: [{ domain, iconTag }, ...] }` for programmatic inspection. Not linked from the web UI.
@@ -222,6 +227,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`/{domain}/json` and `/{app-name}/json` — reliable catalog entries**
+  - Service-icon blocks are built only when a provider actually resolves a slug (`resolveServiceMatches` on domain JSON; no more guessing the raw search term as `selfhst` / `lobehub` slug).
+  - **`variants` lists only upstream assets that exist** — selfh.st and dashboardicons light/dark URLs are included only after a CDN probe confirms the PNG (24 h in-memory cache per slug). Fixes phantom entries such as dashboardicons `reddit-light.png` / `reddit-dark.png` when only the color PNG exists.
+  - Domain JSON now uses the same async `resolveServiceMatches()` path as service-name JSON (replacing per-provider sync resolve).
+  - JSON discovery responses use **`Cache-Control: no-cache`** instead of `max-age=86400`, so variant lists and provider fixes are not stuck in the browser for a day after deploy.
+
+- **Web UI — copy feedback and example URLs** (`index.html`)
+  - Tip / example URL documents `{domain}` **or** `{app-name}`; clicking the example copies via the **global bottom-right toast** (same as image copy), not an inline message in the green tip box.
+  - Service-name searches show the short best-pick URL (`/{app-name}`) and re-enable the **View JSON** link (`/{app-name}/json`).
+  - Service-icon cards are omitted when `/services/resolve` returns no candidates for that provider (instead of probing a guessed slug and failing).
+
 - **`/services/resolve/:service`** — when the path looks like a hostname (contains `.`), runs `serviceSlugFromDomain` before catalog matching so domain searches resolve the same slug the v1 API uses (e.g. `drive.google.com` → `google-drive`).
 - **Web UI domain service-slug derivation** (`index.html`) — `deriveServiceSlug()` mirrors the server rules (`deriveServiceSlugFromDomain` + suite-parent compound slugs) instead of always taking the first domain label.
 
@@ -283,6 +299,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **v1 API cache invalidation** (`src/apiRoutes.js`) — entries whose `.meta.json` or on-disk PNG dimensions are not 128×128 are ignored (treated as a cache miss) so older 256×256 or variable-size outputs are regenerated automatically after deploy, without manual cache clearing.
 
 ### Fixed
+
+- **`/{app-name}/json` and `/{domain}/json` listed providers and variants that do not exist upstream** — e.g. `albert-heijn` only in dashboardicons still produced selfh.st / lobehub blocks with bogus slugs; dashboardicons / selfh.st listed `light` and `dark` proxy/source pairs when the CDN has no `-light` / `-dark` PNG. Resolution no longer falls back to the raw input slug when a catalog has zero matches (`pickResolvedSlug` in `src/serviceAliases.js`); `resolveServiceSlugForProviderSync` validates slugs against each catalog before returning them. Variant availability for selfh.st and dashboardicons is confirmed via CDN probe (`getSelfhstVariantAvailability` / `getDashboardIconsVariantAvailability` in `src/providers.js`).
 
 - **HTML Scraper empty preview on ICO fallbacks (e.g. `word.office.com`, Play Store favicons)** — many upstream `.ico` files use BMP frames that **sharp** cannot decode (`Input buffer contains unsupported image format`). Besticon still reported them in `/{domain}/json` → `endpoints.scraper.icons` (e.g. 128×128), but `probeScraperCandidates` rejected every candidate, so `/s/{domain}` returned **502** and the web UI showed an empty beige placeholder with dimensions but no image. `/s-asset` returned the raw `image/x-icon` bytes, which browsers often refuse to paint in `<img>`. New helpers in `src/imageNormalize.js`: `readImageDimensions` (sharp first, `decode-ico` fallback) and `toDisplayPng` (largest ICO frame → PNG at native size, no 128px minimum). Used by scraper probing (`probeOne`, `probeIconMetadata`), `/s/{domain}` output, `/s-asset` (cached under provider key `asset-v2` so stale raw-ICO entries are not reused), and v1 `tryCandidate` in `src/apiScraper.js`. The HTML Scraper card now falls back to `/s-asset?url=…` when the primary `/s/{domain}` load fails.
 - **Wrong service icon for Google Workspace subdomains (e.g. `drive.google.com`)** — v1 API, best-pick and service-icon cards previously derived the slug from only the first domain label (`drive`), which matched dashboardicons' generic `eu-drive` folder icon instead of Google Drive. Slug derivation now maps suite subdomains to `{parent}-{service}` (with explicit rows in `domainIconTags.js`). **Note:** existing v1 API disk-cache entries are not invalidated automatically — use `?refresh=1` or `/_internal/cache/purge` after deploy.

@@ -984,6 +984,73 @@ async function fetchScraper(domain) {
   return probeScraperCandidates(rankedFallback, finalBaseUrl);
 }
 
+const VARIANT_AVAILABILITY_TTL_MS = 24 * 60 * 60 * 1000;
+const variantAvailabilityCache = new Map();
+
+function readVariantAvailabilityCache(key) {
+  const cached = variantAvailabilityCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.loadedAt > VARIANT_AVAILABILITY_TTL_MS) {
+    variantAvailabilityCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeVariantAvailabilityCache(key, value) {
+  variantAvailabilityCache.set(key, { loadedAt: Date.now(), value });
+}
+
+async function probePngVariantAvailability(cacheKey, urlForVariant) {
+  const color = await fetchFavicon(urlForVariant('color'));
+  if (!color) {
+    writeVariantAvailabilityCache(cacheKey, null);
+    return null;
+  }
+
+  const [light, dark] = await Promise.all([
+    fetchFavicon(urlForVariant('light')),
+    fetchFavicon(urlForVariant('dark')),
+  ]);
+
+  const value = {
+    color: true,
+    light: !!light,
+    dark: !!dark,
+  };
+  writeVariantAvailabilityCache(cacheKey, value);
+  return value;
+}
+
+async function getSelfhstVariantAvailability(slug) {
+  if (!slug) return null;
+
+  const cacheKey = `selfhst:${slug}`;
+  const cached = readVariantAvailabilityCache(cacheKey);
+  if (cached !== null) return cached;
+
+  const { entries } = await ensureSelfhstIndex();
+  if (!entries.some((entry) => entry.slug === slug)) {
+    writeVariantAvailabilityCache(cacheKey, null);
+    return null;
+  }
+
+  return probePngVariantAvailability(cacheKey, (variant) => PROVIDERS.selfhst(slug, variant));
+}
+
+async function getDashboardIconsVariantAvailability(slug) {
+  if (!slug) return null;
+
+  const cacheKey = `dashboardicons:${slug}`;
+  const cached = readVariantAvailabilityCache(cacheKey);
+  if (cached !== null) return cached;
+
+  return probePngVariantAvailability(
+    cacheKey,
+    (variant) => PROVIDERS.dashboardIcons(slug, variant)
+  );
+}
+
 module.exports = {
   fetchGoogle,
   fetchGoogleV2,
@@ -1007,4 +1074,6 @@ module.exports = {
   parseSizesAttr,
   expandSizedVariants,
   PROVIDERS,
+  getSelfhstVariantAvailability,
+  getDashboardIconsVariantAvailability,
 };

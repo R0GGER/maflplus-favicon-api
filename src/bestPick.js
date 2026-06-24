@@ -122,11 +122,25 @@ function buildFallbackFetchers(domain) {
   return defaultOrder.map((k) => all[k]).filter(Boolean);
 }
 
-async function pickBest(domain) {
-  const cached = await cache.get('best', domain, 32);
-  if (cached) return cached;
+function buildServiceFetchers(service) {
+  const all = {
+    selfhst: () => fetchWithCache('selfhst', service, null, () => fetchSelfhst(service)),
+    dashboardicons: () =>
+      fetchWithCache('dashboardicons', service, null, () => fetchDashboardIcons(service)),
+    lobehub: () =>
+      fetchWithCache('lobehub', service, '128_c_v2', () => fetchLobehub(service, 'color', 128)),
+  };
 
-  const fallbacks = buildFallbackFetchers(domain);
+  const defaultOrder = ['selfhst', 'dashboardicons', 'lobehub'];
+  if (DEFAULT_PROVIDER && all[DEFAULT_PROVIDER]) {
+    const rest = defaultOrder.filter((k) => k !== DEFAULT_PROVIDER);
+    return [DEFAULT_PROVIDER, ...rest].map((k) => all[k]);
+  }
+
+  return defaultOrder.map((k) => all[k]);
+}
+
+async function raceFetchers(fallbacks, cacheProvider, cacheKey, cacheSize) {
   if (fallbacks.length === 0) {
     return {
       buffer: TRANSPARENT_1X1_PNG,
@@ -142,9 +156,6 @@ async function pickBest(domain) {
       return r;
     });
 
-  // Head-start strategy: kick off the preferred provider (first in priority
-  // order, e.g. DEFAULT_PROVIDER) immediately. Start the rest after
-  // HEAD_START_MS, or sooner if the preferred provider already failed.
   const firstPromise = wrap(fallbacks[0]);
   const racers = [firstPromise];
 
@@ -172,7 +183,7 @@ async function pickBest(domain) {
       contentType: result.contentType,
       provider: result.provider,
     };
-    await cache.set('best', domain, 32, entry);
+    await cache.set(cacheProvider, cacheKey, cacheSize, entry);
     return entry;
   } catch {
     return {
@@ -182,6 +193,22 @@ async function pickBest(domain) {
       notFound: true,
     };
   }
+}
+
+async function pickBest(domain) {
+  const cached = await cache.get('best', domain, 32);
+  if (cached) return cached;
+
+  const fallbacks = buildFallbackFetchers(domain);
+  return raceFetchers(fallbacks, 'best', domain, 32);
+}
+
+async function pickBestService(service) {
+  const cached = await cache.get('best-service', service, null);
+  if (cached) return cached;
+
+  const fallbacks = buildServiceFetchers(service);
+  return raceFetchers(fallbacks, 'best-service', service, null);
 }
 
 async function fetchWithCache(provider, domain, size, fetcher) {
@@ -206,4 +233,4 @@ async function normalizeTo32(buffer) {
   }
 }
 
-module.exports = { pickBest, fetchWithCache };
+module.exports = { pickBest, pickBestService, fetchWithCache };

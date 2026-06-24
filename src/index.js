@@ -24,11 +24,16 @@ const {
   fetchScraperAsset,
   fetchScraperAllIcons,
   PROVIDERS,
+  getSelfhstVariantAvailability,
+  getDashboardIconsVariantAvailability,
 } = require('./providers');
-const { pickBest, fetchWithCache } = require('./bestPick');
+const { pickBest, pickBestService, fetchWithCache } = require('./bestPick');
 const {
-  resolveServiceSlugForProviderSync,
   resolveServiceMatches,
+  ensureDashboardIndex,
+  ensureSelfhstIndex,
+  ensureLobehubIndex,
+  getLobehubVariantAvailability,
 } = require('./serviceAliases');
 const { serviceSlugFromDomain, listDomainIconTags } = require('./serviceSlugFromDomain');
 const { toDisplayPng } = require('./imageNormalize');
@@ -185,6 +190,7 @@ const VALID_LOBEHUB_SIZES = new Set([64, 128, 256]);
 const DEFAULT_LOBEHUB_SIZE = 128;
 const SERVICE_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/;
 const CACHE_CONTROL = 'public, max-age=86400';
+const JSON_CACHE_CONTROL = 'no-cache';
 
 function sendFavicon(res, entry) {
   res.set('Content-Type', entry.contentType);
@@ -216,6 +222,136 @@ function extractService(raw) {
   const slug = normalizeServiceSlug(raw);
   if (!slug || !SERVICE_SLUG_RE.test(slug)) return null;
   return slug;
+}
+
+function parseDomainOrService(raw) {
+  const domain = extractDomain(raw);
+  if (domain) return { type: 'domain', value: domain };
+  const service = extractService(raw);
+  if (service) return { type: 'service', value: service };
+  return null;
+}
+
+function buildCatalogVariantEndpoints(host, routePrefix, slug, sourceFn, availability) {
+  if (!slug || !availability) return null;
+
+  const encoded = encodeURIComponent(slug);
+  const proxyBase = `${host}/${routePrefix}/${encoded}`;
+  const variants = {};
+
+  if (availability.color) {
+    variants.color = {
+      proxy: proxyBase,
+      source: sourceFn(slug, 'color'),
+    };
+  }
+  if (availability.light) {
+    variants.light = {
+      proxy: `${proxyBase}?variant=light`,
+      source: sourceFn(slug, 'light'),
+    };
+  }
+  if (availability.dark) {
+    variants.dark = {
+      proxy: `${proxyBase}?variant=dark`,
+      source: sourceFn(slug, 'dark'),
+    };
+  }
+
+  if (!variants.color) return null;
+
+  return {
+    service: slug,
+    proxy: variants.color.proxy,
+    source: variants.color.source,
+    variants,
+  };
+}
+
+function emptyCatalogProvider() {
+  return { service: null, query: null, proxy: null, source: null, variants: null };
+}
+
+async function buildServiceCatalogEndpoints(host, query, selfhstServiceSlug, dashboardServiceSlug, lobehubServiceSlug) {
+  const sizedEntries = (sizes, proxyPath, sourceFn) =>
+    Object.fromEntries(
+      sizes.map((size) => [
+        String(size),
+        { proxy: `${host}${proxyPath(size)}`, source: sourceFn(size) },
+      ])
+    );
+
+  const [selfhstAvailability, dashboardAvailability, lobehubAvailability] = await Promise.all([
+    selfhstServiceSlug
+      ? getSelfhstVariantAvailability(selfhstServiceSlug)
+      : Promise.resolve(null),
+    dashboardServiceSlug
+      ? getDashboardIconsVariantAvailability(dashboardServiceSlug)
+      : Promise.resolve(null),
+    lobehubServiceSlug
+      ? Promise.resolve(getLobehubVariantAvailability(lobehubServiceSlug))
+      : Promise.resolve(null),
+  ]);
+
+  const selfhstBlock = buildCatalogVariantEndpoints(
+    host,
+    'sh',
+    selfhstServiceSlug,
+    PROVIDERS.selfhst,
+    selfhstAvailability
+  );
+  const selfhst = selfhstBlock
+    ? { ...selfhstBlock, query }
+    : emptyCatalogProvider();
+
+  const dashboardBlock = buildCatalogVariantEndpoints(
+    host,
+    'di',
+    dashboardServiceSlug,
+    PROVIDERS.dashboardIcons,
+    dashboardAvailability
+  );
+  const dashboardicons = dashboardBlock
+    ? { ...dashboardBlock, query }
+    : emptyCatalogProvider();
+
+  const lobehubAvailabilityResolved = lobehubAvailability;
+  const lobehubBlock = buildCatalogVariantEndpoints(
+    host,
+    'lb',
+    lobehubServiceSlug,
+    PROVIDERS.lobehub,
+    lobehubAvailabilityResolved
+  );
+  const lobehubSizes = [64, 128, 256];
+  const lobehubSlugEncoded = lobehubServiceSlug
+    ? encodeURIComponent(lobehubServiceSlug)
+    : null;
+  const lobehub = lobehubBlock
+    ? {
+        ...lobehubBlock,
+        query,
+        proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}`,
+        sizes: sizedEntries(
+          lobehubSizes,
+          (size) => `/lb/${lobehubSlugEncoded}?size=${size}`,
+          () => PROVIDERS.lobehub(lobehubServiceSlug)
+        ),
+        variants: Object.fromEntries(
+          Object.entries(lobehubBlock.variants).map(([variant, entry]) => [
+            variant,
+            {
+              proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}${
+                variant === 'color' ? '' : `&variant=${variant}`
+              }`,
+              source: entry.source,
+            },
+          ])
+        ),
+      }
+    : { ...emptyCatalogProvider(), sizes: null };
+
+  return { selfhst, dashboardicons, lobehub };
 }
 
 // Google favicon proxy: /g/:size/:domain
@@ -572,16 +708,58 @@ app.get('/providers', (req, res) => {
   });
 });
 
-// JSON list of all favicon endpoint URLs for a domain: /:domain/json
+// JSON list of favicon endpoint URLs for a domain or service: /:domain/json
 app.get('/:domain/json', async (req, res) => {
-  const domain = extractDomain(req.params.domain);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+  const parsed = parseDomainOrService(req.params.domain);
+  if (!parsed) return res.status(400).json({ error: 'Invalid domain or service name.' });
 
   const host = `${req.protocol}://${req.get('host')}`;
+
+  if (parsed.type === 'service') {
+    const service = parsed.value;
+    const encoded = encodeURIComponent(service);
+
+    try {
+      const matches = await resolveServiceMatches(service);
+      const { selfhst, dashboardicons, lobehub } = await buildServiceCatalogEndpoints(
+        host,
+        service,
+        matches.providers.selfhst.resolved,
+        matches.providers.dashboardicons.resolved,
+        matches.providers.lobehub.resolved
+      );
+
+      res.set('Cache-Control', JSON_CACHE_CONTROL);
+      return res.json({
+        service,
+        endpoints: {
+          best: {
+            proxy: `${host}/${encoded}`,
+            source: null,
+          },
+          resolve: {
+            proxy: `${host}/services/resolve/${encoded}`,
+            source: null,
+          },
+          selfhst,
+          dashboardicons,
+          lobehub,
+        },
+      });
+    } catch (err) {
+      console.error('Service JSON error:', err.message);
+      return res.status(500).json({ error: 'Internal error.' });
+    }
+  }
+
+  const domain = parsed.value;
   const encoded = encodeURIComponent(domain);
   const [scraperCached, scraperAllIcons] = await Promise.all([
     cache.get('scraper', domain, null),
     fetchScraperAllIcons(domain),
+    ensureDashboardIndex(),
+    ensureSelfhstIndex(),
+    ensureLobehubIndex(),
   ]);
 
   const googleSizes = [16, 32, 64, 128];
@@ -629,101 +807,25 @@ app.get('/:domain/json', async (req, res) => {
 
   const serviceSlug = serviceSlugFromDomain(domain);
 
-  const selfhstServiceSlug = serviceSlug
-    ? resolveServiceSlugForProviderSync(serviceSlug, 'selfhst')
-    : null;
-  const dashboardServiceSlug = serviceSlug
-    ? resolveServiceSlugForProviderSync(serviceSlug, 'dashboardicons')
-    : null;
-  const lobehubServiceSlug = serviceSlug
-    ? resolveServiceSlugForProviderSync(serviceSlug, 'lobehub')
-    : null;
+  let selfhstServiceSlug = null;
+  let dashboardServiceSlug = null;
+  let lobehubServiceSlug = null;
+  if (serviceSlug) {
+    const matches = await resolveServiceMatches(serviceSlug);
+    selfhstServiceSlug = matches.providers.selfhst.resolved;
+    dashboardServiceSlug = matches.providers.dashboardicons.resolved;
+    lobehubServiceSlug = matches.providers.lobehub.resolved;
+  }
 
-  const selfhstSlugEncoded = selfhstServiceSlug
-    ? encodeURIComponent(selfhstServiceSlug)
-    : null;
-  const dashboardSlugEncoded = dashboardServiceSlug
-    ? encodeURIComponent(dashboardServiceSlug)
-    : null;
-  const lobehubSlugEncoded = lobehubServiceSlug
-    ? encodeURIComponent(lobehubServiceSlug)
-    : null;
-  const selfhst = selfhstServiceSlug
-    ? {
-        service: selfhstServiceSlug,
-        query: serviceSlug,
-        proxy: `${host}/sh/${selfhstSlugEncoded}`,
-        source: PROVIDERS.selfhst(selfhstServiceSlug),
-        variants: {
-          color: {
-            proxy: `${host}/sh/${selfhstSlugEncoded}`,
-            source: PROVIDERS.selfhst(selfhstServiceSlug, 'color'),
-          },
-          light: {
-            proxy: `${host}/sh/${selfhstSlugEncoded}?variant=light`,
-            source: PROVIDERS.selfhst(selfhstServiceSlug, 'light'),
-          },
-          dark: {
-            proxy: `${host}/sh/${selfhstSlugEncoded}?variant=dark`,
-            source: PROVIDERS.selfhst(selfhstServiceSlug, 'dark'),
-          },
-        },
-      }
-    : { service: null, query: null, proxy: null, source: null, variants: null };
+  const { selfhst, dashboardicons, lobehub } = await buildServiceCatalogEndpoints(
+    host,
+    serviceSlug,
+    selfhstServiceSlug,
+    dashboardServiceSlug,
+    lobehubServiceSlug
+  );
 
-  const dashboardicons = dashboardServiceSlug
-    ? {
-        service: dashboardServiceSlug,
-        query: serviceSlug,
-        proxy: `${host}/di/${dashboardSlugEncoded}`,
-        source: PROVIDERS.dashboardIcons(dashboardServiceSlug),
-        variants: {
-          color: {
-            proxy: `${host}/di/${dashboardSlugEncoded}`,
-            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'color'),
-          },
-          light: {
-            proxy: `${host}/di/${dashboardSlugEncoded}?variant=light`,
-            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'light'),
-          },
-          dark: {
-            proxy: `${host}/di/${dashboardSlugEncoded}?variant=dark`,
-            source: PROVIDERS.dashboardIcons(dashboardServiceSlug, 'dark'),
-          },
-        },
-      }
-    : { service: null, query: null, proxy: null, source: null, variants: null };
-
-  const lobehubSizes = [64, 128, 256];
-  const lobehub = lobehubServiceSlug
-    ? {
-        service: lobehubServiceSlug,
-        query: serviceSlug,
-        proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}`,
-        source: PROVIDERS.lobehub(lobehubServiceSlug),
-        sizes: sizedEntries(
-          lobehubSizes,
-          (size) => `/lb/${lobehubSlugEncoded}?size=${size}`,
-          () => PROVIDERS.lobehub(lobehubServiceSlug)
-        ),
-        variants: {
-          color: {
-            proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}`,
-            source: PROVIDERS.lobehub(lobehubServiceSlug, 'color'),
-          },
-          light: {
-            proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}&variant=light`,
-            source: PROVIDERS.lobehub(lobehubServiceSlug, 'light'),
-          },
-          dark: {
-            proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}&variant=dark`,
-            source: PROVIDERS.lobehub(lobehubServiceSlug, 'dark'),
-          },
-        },
-      }
-    : { service: null, query: null, proxy: null, source: null, sizes: null, variants: null };
-
-  res.set('Cache-Control', CACHE_CONTROL);
+  res.set('Cache-Control', JSON_CACHE_CONTROL);
   res.json({
     domain,
     endpoints: {
@@ -776,13 +878,15 @@ app.get('/:domain/json', async (req, res) => {
   });
 });
 
-// Direct / best-pick favicon: /:domain
+// Direct / best-pick favicon: /:domain or /:service
 app.get('/:domain', async (req, res) => {
-  const domain = extractDomain(req.params.domain);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+  const parsed = parseDomainOrService(req.params.domain);
+  if (!parsed) return res.status(400).json({ error: 'Invalid domain or service name.' });
 
   try {
-    const entry = await pickBest(domain);
+    const entry = parsed.type === 'domain'
+      ? await pickBest(parsed.value)
+      : await pickBestService(parsed.value);
     if (entry.notFound) {
       res.status(404);
     }

@@ -507,9 +507,16 @@ function sortMatchesByScore(matches) {
   return [...matches].sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug));
 }
 
-function pickResolvedSlug(matches, fallback) {
-  const best = sortMatchesByScore(matches)[0];
-  return best?.slug || fallback;
+function pickResolvedSlug(matches) {
+  return sortMatchesByScore(matches)[0]?.slug || null;
+}
+
+function pickAnyResolvedSlug(...matchLists) {
+  for (const matches of matchLists) {
+    const slug = pickResolvedSlug(matches);
+    if (slug) return slug;
+  }
+  return null;
 }
 
 async function getSelfhstSlugCandidates(slug) {
@@ -563,15 +570,43 @@ async function resolveServiceSlug(slug) {
 function resolveServiceSlugSync(slug) {
   const queryKey = normalizeServiceAliasKey(slug);
   if (!queryKey) return '';
-  const { aliasToSlug } = ensureDashboardSyncIndex();
-  return aliasToSlug.get(queryKey) || queryKey;
+  const { aliasToSlug, slugs } = ensureDashboardSyncIndex();
+  if (aliasToSlug.has(queryKey)) return aliasToSlug.get(queryKey);
+  if (slugs.has(queryKey)) return queryKey;
+  return '';
+}
+
+function resolveSelfhstSlugSync(slug) {
+  const queryKey = normalizeServiceAliasKey(slug);
+  if (!queryKey) return '';
+
+  const staticHit = STATIC_PROVIDER_ALIASES.selfhst[queryKey];
+  if (staticHit) return staticHit;
+
+  const entries = selfhstCache.entries;
+  if (!entries || entries.length === 0) return '';
+
+  if (entries.some((entry) => entry.slug === queryKey)) return queryKey;
+
+  return pickResolvedSlug(searchSelfhstMatches(slug, entries)) || '';
 }
 
 function resolveLobehubSlugSync(slug) {
   const queryKey = normalizeServiceAliasKey(slug);
   if (!queryKey) return '';
-  const { aliasToSlug } = ensureLobehubSyncIndex();
-  return aliasToSlug.get(queryKey) || queryKey;
+
+  const index = lobehubCache.entries?.size ? lobehubCache : ensureLobehubSyncIndex();
+  if (index.aliasToSlug?.has(queryKey)) {
+    const resolved = index.aliasToSlug.get(queryKey);
+    if (index.slugs?.has(resolved)) return resolved;
+  }
+  if (index.slugs?.has(queryKey)) return queryKey;
+
+  if (index.entries?.size > 0) {
+    return pickResolvedSlug(searchLobehubMatches(slug, index)) || '';
+  }
+
+  return '';
 }
 
 function getServiceSlugCandidatesSync(slug) {
@@ -602,23 +637,30 @@ async function resolveServiceMatches(slug) {
 
   return {
     input,
-    resolved: pickResolvedSlug(dashboardCandidates, input),
+    resolved: pickAnyResolvedSlug(dashboardCandidates, selfhstCandidates, lobehubCandidates),
     candidates: allCandidates,
     providers: {
       selfhst: {
-        resolved: pickResolvedSlug(selfhstCandidates, input),
+        resolved: pickResolvedSlug(selfhstCandidates),
         candidates: selfhstCandidates,
       },
       dashboardicons: {
-        resolved: pickResolvedSlug(dashboardCandidates, input),
+        resolved: pickResolvedSlug(dashboardCandidates),
         candidates: dashboardCandidates,
       },
       lobehub: {
-        resolved: pickResolvedSlug(lobehubCandidates, input),
+        resolved: pickResolvedSlug(lobehubCandidates),
         candidates: lobehubCandidates,
       },
     },
   };
+}
+
+function getLobehubVariantAvailability(slug) {
+  if (!slug) return null;
+  const index = lobehubCache.entries?.size ? lobehubCache : ensureLobehubSyncIndex();
+  if (!index.entries?.has(slug)) return null;
+  return { color: true, light: true, dark: true };
 }
 
 function resolveServiceSlugForProviderSync(slug, provider) {
@@ -628,7 +670,8 @@ function resolveServiceSlugForProviderSync(slug, provider) {
   if (staticHit) return staticHit;
   if (provider === 'dashboardicons') return resolveServiceSlugSync(slug);
   if (provider === 'lobehub') return resolveLobehubSlugSync(slug);
-  return queryKey;
+  if (provider === 'selfhst') return resolveSelfhstSlugSync(slug);
+  return '';
 }
 
 module.exports = {
@@ -645,4 +688,5 @@ module.exports = {
   ensureDashboardIndex,
   ensureSelfhstIndex,
   ensureLobehubIndex,
+  getLobehubVariantAvailability,
 };

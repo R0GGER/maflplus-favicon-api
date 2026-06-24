@@ -391,17 +391,6 @@
       opacity: 0.7;
     }
 
-    .tip .tip-copied {
-      display: inline;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #2e7d32;
-      opacity: 0;
-      transition: opacity 0.25s;
-    }
-
-    .tip .tip-copied.show { opacity: 1; }
-
     .search-section { margin-bottom: 2rem; }
 
     .search-section label {
@@ -1096,8 +1085,8 @@
 
     <div class="tip">
       <strong><span class="icon">&#9881;</span> Tip</strong>
-      Use the favicon directly via <code id="api-example" onclick="copyApiUrl()">https://&lt;this-host&gt;/{domain}</code>,
-      or look up a self-hosted by app name (e.g. firefox, immich, jellyfin). Click any image to copy its URL. <span class="tip-copied" id="tip-copied">&#10003; URL copied to clipboard</span>
+      Use the favicon directly via <code id="api-example" onclick="copyApiUrl()">https://&lt;this-host&gt;/{domain}</code>
+      or <code>{app-name}</code> (e.g. jellyfin, firefox). Click any image to copy its URL.
     </div>
 
     <div class="search-section">
@@ -1243,7 +1232,7 @@
         <div class="meta" id="logodev-meta"></div>
       </div>
 
-      <div class="results-section-divider" id="service-icons-divider" aria-hidden="true">Service icons</div>
+      <div class="results-section-divider" id="service-icons-divider" aria-hidden="true">App Icons</div>
 
       <!-- selfhst (service-based) -->
       <div class="card" id="selfhst-card" data-card-type="service">
@@ -1753,37 +1742,62 @@
       });
     }
 
+    function providerHasMatches(data) {
+      return !!(data?.resolved || (data?.candidates && data.candidates.length > 0));
+    }
+
+    function hideServiceProviderCard(provider) {
+      const card = document.getElementById(`${provider}-card`);
+      if (card) card.style.display = 'none';
+      const panel = document.getElementById(`${provider}-candidates`);
+      const grid = document.getElementById(`${provider}-candidates-grid`);
+      if (panel) panel.hidden = true;
+      if (grid) grid.innerHTML = '';
+    }
+
     function startServiceIconLoads(resolveData, hideOnError) {
-      const selfhstData = resolveData.providers?.selfhst || { resolved: resolveData.resolved, candidates: [] };
-      const dashboardData = resolveData.providers?.dashboardicons || { resolved: resolveData.resolved, candidates: [] };
-      const lobehubData = resolveData.providers?.lobehub || { resolved: resolveData.resolved, candidates: [] };
-      const searchQuery = resolveData.input || selfhstData.resolved;
+      const selfhstData = resolveData.providers?.selfhst || { resolved: null, candidates: [] };
+      const dashboardData = resolveData.providers?.dashboardicons || { resolved: null, candidates: [] };
+      const lobehubData = resolveData.providers?.lobehub || { resolved: null, candidates: [] };
+      const searchQuery = resolveData.input || resolveData.resolved;
 
-      currentSelfhstSlug = selfhstData.resolved || searchQuery;
-      currentSelfhstVariant = 'color';
-      resetSelfhstVariantButtons();
-      setActiveVariant('selfhst-variants', 'color');
-      loadSelfhst(searchQuery, 'color', { hideOnError, activeSlug: currentSelfhstSlug });
-      probeAndShowSelfhstVariants(currentSelfhstSlug);
-      renderServiceCandidates('selfhst', selfhstData.candidates, currentSelfhstSlug);
+      if (providerHasMatches(selfhstData)) {
+        currentSelfhstSlug = selfhstData.resolved || searchQuery;
+        currentSelfhstVariant = 'color';
+        resetSelfhstVariantButtons();
+        setActiveVariant('selfhst-variants', 'color');
+        loadSelfhst(searchQuery, 'color', { hideOnError, activeSlug: currentSelfhstSlug });
+        probeAndShowSelfhstVariants(currentSelfhstSlug);
+        renderServiceCandidates('selfhst', selfhstData.candidates, currentSelfhstSlug);
+      } else {
+        hideServiceProviderCard('selfhst');
+      }
 
-      currentDashboardIconsSlug = dashboardData.resolved || searchQuery;
-      currentDashboardIconsVariant = 'color';
-      resetDashboardIconsVariantButtons();
-      setActiveVariant('dashboardicons-variants', 'color');
-      loadDashboardIcons(searchQuery, 'color', { hideOnError, activeSlug: currentDashboardIconsSlug });
-      probeAndShowDashboardIconsVariants(currentDashboardIconsSlug);
-      renderServiceCandidates('dashboardicons', dashboardData.candidates, currentDashboardIconsSlug);
+      if (providerHasMatches(dashboardData)) {
+        currentDashboardIconsSlug = dashboardData.resolved || searchQuery;
+        currentDashboardIconsVariant = 'color';
+        resetDashboardIconsVariantButtons();
+        setActiveVariant('dashboardicons-variants', 'color');
+        loadDashboardIcons(searchQuery, 'color', { hideOnError, activeSlug: currentDashboardIconsSlug });
+        probeAndShowDashboardIconsVariants(currentDashboardIconsSlug);
+        renderServiceCandidates('dashboardicons', dashboardData.candidates, currentDashboardIconsSlug);
+      } else {
+        hideServiceProviderCard('dashboardicons');
+      }
 
-      currentLobehubSlug = lobehubData.resolved || searchQuery;
-      currentLobehubVariant = 'color';
-      currentLobehubSize = 128;
-      resetLobehubVariantButtons();
-      setActiveVariant('lobehub-variants', 'color');
-      setActiveSize('lobehub-sizes', 128);
-      loadLobehub(searchQuery, 'color', { hideOnError, activeSlug: currentLobehubSlug });
-      probeAndShowLobehubVariants(currentLobehubSlug);
-      renderServiceCandidates('lobehub', lobehubData.candidates, currentLobehubSlug);
+      if (providerHasMatches(lobehubData)) {
+        currentLobehubSlug = lobehubData.resolved || searchQuery;
+        currentLobehubVariant = 'color';
+        currentLobehubSize = 128;
+        resetLobehubVariantButtons();
+        setActiveVariant('lobehub-variants', 'color');
+        setActiveSize('lobehub-sizes', 128);
+        loadLobehub(searchQuery, 'color', { hideOnError, activeSlug: currentLobehubSlug });
+        probeAndShowLobehubVariants(currentLobehubSlug);
+        renderServiceCandidates('lobehub', lobehubData.candidates, currentLobehubSlug);
+      } else {
+        hideServiceProviderCard('lobehub');
+      }
       updateServiceIconsDivider();
     }
 
@@ -1916,12 +1930,16 @@
       if (!resolveData) return;
 
       currentMode = 'service';
-      currentService = resolveData.providers?.selfhst?.resolved || resolveData.resolved;
+      currentService = resolveData.resolved || resolveData.input;
       currentDomain = '';
 
+      const serviceQuery = resolveData.input || slug;
       document.getElementById('api-example').textContent =
-        `${location.origin}/sh/${encodeURIComponent(currentService)}`;
-      document.getElementById('json-button-wrap').classList.remove('visible');
+        `${location.origin}/${encodeURIComponent(serviceQuery)}`;
+      const jsonUrl = `${location.origin}/${encodeURIComponent(serviceQuery)}/json`;
+      document.getElementById('json-link').href = jsonUrl;
+      document.getElementById('json-link-url').textContent = jsonUrl;
+      document.getElementById('json-button-wrap').classList.add('visible');
       document.getElementById('results').classList.add('visible');
 
       showCardsByType('service');
@@ -2555,9 +2573,7 @@
       if (!text) return;
       try {
         await navigator.clipboard.writeText(text);
-        const msg = document.getElementById('tip-copied');
-        msg.classList.add('show');
-        setTimeout(() => msg.classList.remove('show'), 2000);
+        showGlobalToast(text);
       } catch {}
     }
 
