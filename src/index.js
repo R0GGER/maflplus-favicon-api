@@ -24,6 +24,7 @@ const {
   fetchScraperAsset,
   fetchScraperAllIcons,
   getScraperMaxIconSize,
+  getScraperResolvedDomain,
   invalidateScraperDomainCaches,
   PROVIDERS,
   getSelfhstVariantAvailability,
@@ -43,6 +44,7 @@ const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
 const { extractDomainFromInput } = require('./domainValidation');
+const { scraperDomainAlternatives } = require('./domainAlternatives');
 
 // Mirror of the parsing logic in src/apiRoutes.js (kept local so the homepage
 // /providers endpoint can advertise the current API mode to the docs page
@@ -874,6 +876,8 @@ app.get('/:domain/json', async (req, res) => {
         source: scraperCached?.url || null,
         maxIconSize: getScraperMaxIconSize(),
         icons: scraperAllIcons,
+        fetchedFrom: getScraperResolvedDomain(domain),
+        alternatives: scraperDomainAlternatives(domain).map((alt) => ({ domain: alt })),
       },
       selfhst,
       dashboardicons,

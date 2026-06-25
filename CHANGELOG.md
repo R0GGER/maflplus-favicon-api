@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HTML scraper www/bare domain fallback** (`src/domainAlternatives.js`)
+  - When the scraper finds no icons for a bare hostname (e.g. `nu.nl`), it automatically retries on the `www.` variant (`www.nu.nl`); conversely, `www.` lookups also try the bare hostname.
+  - Applied to `fetchScraper` (`/s/{domain}`), `fetchScraperAllIcons` (`/{domain}/json`) and v1 `fetchBySourcePriority` (`/api/v1/favicon`).
+  - **`/{domain}/json`** — `endpoints.scraper.fetchedFrom` reports which hostname supplied the icons; `endpoints.scraper.alternatives` lists suggested hostnames to try.
+  - **Web UI — HTML Scraper alternative hint** (`index.html`) — when no icon is found, shows a clickable “Try www.{domain}” suggestion; when a fallback hostname succeeds, notes that the icon came from the alternate host.
+
 - **Optional scraper discovery disk cache** (`SCRAPER_DISK_CACHE`, `SCRAPER_DISK_CACHE_DIR` in `.env.example`)
   - When `SCRAPER_DISK_CACHE=true`, homepage HTML, enriched icon lists (`/{domain}/json`), besticon JSON, parsed web manifests and icon-probe metadata are persisted as JSON under `{CACHE_DIR}/scraper-discovery/` (default `/cache/scraper-discovery` in Docker). Entries survive container restarts and are shared across cluster workers.
   - TTL follows `SCRAPER_ICONS_CACHE_TTL` (default 1 hour). New module `src/scraperDiskCache.js`; wired from `src/providers.js` on read/write alongside the existing in-memory LRU caches.
@@ -19,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **HTML scraper / `{domain}/json` felt stuck and returned fewer icons** — the www-fallback page fetch always tried both bare and `www.` hostnames even when the first page already had icon tags, and `fetchScraperAllIcons` re-ran manifest/hint probes after besticon had already returned sized icons. Page fetch now stops early once icon links are found; besticon results short-circuit the slow probe path; besticon and page HTML fetch run in parallel; besticon gets its own `BESTICON_TIMEOUT` (default 15s). The web UI aborts the JSON wait after 20s and falls back to `/s/{domain}`.
+- **HTML scraper stopped at the first homepage with HTML** — `fetchScraperPage` now tries both `https://{domain}/` and `https://www.{domain}/` (when applicable) and keeps the page with the most `<link rel="icon">`-style candidates, instead of returning the first response that merely exceeds the minimum HTML size.
 - **HTML scraper re-fetched discovery data on every request** — only the final favicon PNG (`scraper_{domain}` in `CACHE_DIR`) and the enriched icon list (`scraperIconsCache`) were cached before; HTML, manifests and probe results were fetched anew on each cache miss or after restart. Discovery layers are now cached in memory and optionally on disk.
 - **`GET /s/{domain}?refresh=1` only cleared the favicon disk cache** — now also calls `invalidateScraperDomainCaches()` to drop in-memory scraper discovery state and domain-keyed disk discovery files (`page/`, `icons/`, `besticon/` under `scraper-discovery/`).
 
