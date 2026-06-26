@@ -787,6 +787,16 @@ async function serveSizedScraperIcon(domain, size) {
   }
   if (!allIcons || allIcons.length === 0) return null;
 
+  // If no discovered icon can natively satisfy the requested size, defer to the
+  // scraper's fallback chain (catalog / Google) instead of upscaling a tiny
+  // source. e.g. facebook.com only exposes a 60×60 favicon.ico to scrapers, so
+  // /scraper/128/facebook.com should serve the high-res selfh.st/dashboard icon
+  // rather than a blurry 60→128 upscale. Returning null makes scraperHandler
+  // fall through to fetchScraper() (which runs the catalog/Google fallback) and
+  // resize that result to the requested size.
+  const largestWidth = allIcons.reduce((max, i) => Math.max(max, i.width || 0), 0);
+  if (largestWidth < size) return null;
+
   // Pick the smallest source icon that is >= the requested size (sharpest
   // downscale). allIcons is sorted largest-first.
   let bestIcon = allIcons[0];
@@ -1164,7 +1174,10 @@ app.get('/:domain/json', async (req, res) => {
   let dashboardServiceSlug = null;
   let lobehubServiceSlug = null;
   if (serviceSlug) {
-    const matches = await resolveServiceMatches(serviceSlug);
+    // serviceSlug comes from the domain label (not a user-typed query), so
+    // resolve it strictly to avoid advertising fuzzily-matched, unrelated
+    // catalog icons (e.g. maflplus.eu → "mailplus") in the JSON endpoints list.
+    const matches = await resolveServiceMatches(serviceSlug, { strict: true });
     selfhstServiceSlug = matches.providers.selfhst.resolved;
     dashboardServiceSlug = matches.providers.dashboardicons.resolved;
     lobehubServiceSlug = matches.providers.lobehub.resolved;

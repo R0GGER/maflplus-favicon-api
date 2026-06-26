@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] — 2026-06-26
+
+### Fixed
+
+- **Wrong fallback icon for unknown brand domains** (e.g. `maflplus.eu` served the unrelated **`mailplus`** envelope icon instead of the site's own logo) — slugs derived automatically from a domain label were resolved against the selfh.st / dashboard-icons / LobeHub catalogs using Levenshtein **fuzzy** matching, so a brand name one character away from a catalog entry (`maflplus` vs `mailplus`, similarity 0.875 > 0.8 threshold) hijacked the result before the site's real favicon was ever scraped. Domain-derived catalog lookups are now **strict** (exact slug or curated/static alias only) across the scraper catalog fallback (`fetchScraperCatalogFallback`), the best-pick race (`buildFallbackFetchers`), the HTML-scraper service buckets (`resolveServiceSlugForProviderSync`), and the `/{domain}/json` provider list (`resolveServiceMatches(slug, { strict })`). Fuzzy matching is unchanged for service names a user actually types (`/{service}`, `/sh/`, `/di/`, `/lb/`). New `strict` option added to `getSelfhstSlugCandidates` / `getDashboardIconsSlugCandidates` / `getLobehubSlugCandidates` and threaded through `fetchSelfhst` / `fetchDashboardIcons` / `fetchLobehub`.
+- **selfh.st exact slug match ranked below fuzzy partials** (e.g. searching `plex` / `plex.tv` showed **Guardian (Plex)** as the primary selfh.st icon instead of plain **Plex**) — `searchSelfhstMatches` gave an exact catalog-slug match a fixed score of `100`, but selfh.st scoring is *additive*, so partial matches accumulated higher totals (`guardian-plex` and `spotify-to-plex` scored `133` via the `-plex` suffix + name-contains bonuses) and were sorted above the exact match. Exact slug matches now receive a dominant score so they always rank first; fuzzy candidates remain as ordered "alternative matches". (Dashboard-icons / LobeHub were unaffected — their scoring uses `Math.max`, not addition.)
+- **Sized scraper route upscaled tiny icons instead of using the fallback** (e.g. `facebook.com` only exposes a 60×60 `favicon.ico` to scrapers, so `/scraper/128/facebook.com` served a blurry 60→128 upscale while the auto proxy `/scraper/facebook.com` correctly returned the high-res selfh.st icon) — `serveSizedScraperIcon` now returns `null` when no discovered icon can natively satisfy the requested size, letting the handler fall through to `fetchScraper()` (catalog / Google fallback) and resize that instead. Sizes the scraped icon *can* satisfy (≤ its native resolution) still use the scraped source; only sizes that would require upscaling defer to the fallback. No effect on domains whose scraped icons are already large enough.
+
 ## [2.3.1] — 2026-06-26
 
 ### Added
@@ -20,9 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Upstream favicon fetch headers** — provider fetches now use the same browser-like `User-Agent` and raster-preferring `Accept` header as the HTML scraper instead of `FaviconProxy/1.0`, reducing cases where CDNs return SVG-only responses to bot-like clients.
-
-### Changed
-
 - **favicondev upstream — Favicon Extractor** — the `/favicondev/` provider (alias `/p/`) now proxies `https://www.faviconextractor.com/favicon/{domain}` instead of `https://favicon-3j1.pages.dev/favicon/{domain}`. README, `.env.example`, and the Web UI direct-link were updated accordingly.
 
 ## [2.3.0] — 2026-06-26

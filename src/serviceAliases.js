@@ -395,8 +395,13 @@ function searchSelfhstMatches(slug, entries, limit = 8) {
     const hit = entries.find((entry) => entry.slug === staticResolved);
     addMatch(hit || { slug: staticResolved, label: staticResolved }, 1000);
   } else {
+    // An exact slug match is the canonical result and must always rank first.
+    // selfh.st scoring is additive (score += ...), so partial matches can
+    // exceed 100 (e.g. query "plex": guardian-plex / spotify-to-plex score 133
+    // via the "-plex" suffix + name-contains bonuses). Give the exact match a
+    // dominant score so it can never be outranked by a fuzzy partial match.
     const exact = entries.find((entry) => entry.slug === queryKey);
-    if (exact) addMatch(exact, 100);
+    if (exact) addMatch(exact, 1000);
   }
 
   for (const entry of scored) {
@@ -519,9 +524,21 @@ function pickAnyResolvedSlug(...matchLists) {
   return null;
 }
 
-async function getSelfhstSlugCandidates(slug) {
+// Strict resolution: exact catalog slug or a curated/static/real alias only —
+// never a Levenshtein/fuzzy match. Used for slugs derived automatically from a
+// domain (e.g. maflplus.eu → "maflplus"), where an approximate match such as
+// maflplus → mailplus would serve a completely different product's icon. Fuzzy
+// matching stays enabled for service names the user actually typed.
+async function getSelfhstSlugCandidates(slug, { strict = false } = {}) {
   const { entries } = await ensureSelfhstIndex();
   const queryKey = normalizeServiceAliasKey(slug);
+
+  if (strict) {
+    if (!queryKey) return [];
+    const staticResolved = STATIC_PROVIDER_ALIASES.selfhst[queryKey];
+    if (staticResolved) return [staticResolved];
+    return entries.some((entry) => entry.slug === queryKey) ? [queryKey] : [];
+  }
 
   if (entries.some((entry) => entry.slug === queryKey)) {
     return [queryKey];
@@ -541,13 +558,37 @@ async function getSelfhstSlugCandidates(slug) {
   return queryKey ? [queryKey] : [];
 }
 
-async function getDashboardIconsSlugCandidates(slug) {
+async function getDashboardIconsSlugCandidates(slug, { strict = false } = {}) {
   const index = await ensureDashboardIndex();
+
+  if (strict) {
+    const queryKey = normalizeServiceAliasKey(slug);
+    if (!queryKey) return [];
+    const staticResolved = STATIC_PROVIDER_ALIASES.dashboardicons[queryKey];
+    if (staticResolved) return [staticResolved];
+    if (index.aliasToSlug?.has(queryKey)) {
+      const resolved = index.aliasToSlug.get(queryKey);
+      if (index.slugs?.has(resolved)) return [resolved];
+    }
+    return index.slugs?.has(queryKey) ? [queryKey] : [];
+  }
+
   return searchDashboardMatches(slug, index).map((match) => match.slug);
 }
 
-async function getLobehubSlugCandidates(slug) {
+async function getLobehubSlugCandidates(slug, { strict = false } = {}) {
   const index = await ensureLobehubIndex();
+
+  if (strict) {
+    const queryKey = normalizeServiceAliasKey(slug);
+    if (!queryKey) return [];
+    if (index.aliasToSlug?.has(queryKey)) {
+      const resolved = index.aliasToSlug.get(queryKey);
+      if (index.slugs?.has(resolved)) return [resolved];
+    }
+    return index.slugs?.has(queryKey) ? [queryKey] : [];
+  }
+
   return searchLobehubMatches(slug, index).map((match) => match.slug);
 }
 
@@ -615,7 +656,7 @@ function getServiceSlugCandidatesSync(slug) {
   return collectDashboardCandidates(queryKey, aliasToSlug, slugs);
 }
 
-async function resolveServiceMatches(slug) {
+async function resolveServiceMatches(slug, { strict = false } = {}) {
   const input = normalizeServiceAliasKey(slug);
   const [selfhstIndex, dashboardIndex, lobehubIndex] = await Promise.all([
     ensureSelfhstIndex(),
@@ -623,9 +664,17 @@ async function resolveServiceMatches(slug) {
     ensureLobehubIndex(),
   ]);
 
-  const selfhstCandidates = searchSelfhstMatches(input, selfhstIndex.entries);
-  const dashboardCandidates = searchDashboardMatches(input, dashboardIndex);
-  const lobehubCandidates = searchLobehubMatches(input, lobehubIndex);
+  // Strict mode (domain-derived slugs): only exact/alias matches, no fuzzy.
+  // A score is synthesized so the shared selection logic below still works.
+  const selfhstCandidates = strict
+    ? (await getSelfhstSlugCandidates(input, { strict: true })).map((s) => ({ slug: s, label: s, score: 100 }))
+    : searchSelfhstMatches(input, selfhstIndex.entries);
+  const dashboardCandidates = strict
+    ? (await getDashboardIconsSlugCandidates(input, { strict: true })).map((s) => ({ slug: s, label: s, score: 100 }))
+    : searchDashboardMatches(input, dashboardIndex);
+  const lobehubCandidates = strict
+    ? (await getLobehubSlugCandidates(input, { strict: true })).map((s) => ({ slug: s, label: s, score: 100 }))
+    : searchLobehubMatches(input, lobehubIndex);
   const allCandidates = [
     ...new Set([
       input,
@@ -663,14 +712,39 @@ function getLobehubVariantAvailability(slug) {
   return { color: true, light: true, dark: true };
 }
 
+function resolveSelfhstSlugStrict(slug) {
+  const queryKey = normalizeServiceAliasKey(slug);
+  if (!queryKey) return '';
+  const staticHit = STATIC_PROVIDER_ALIASES.selfhst[queryKey];
+  if (staticHit) return staticHit;
+  const entries = selfhstCache.entries;
+  if (!entries || entries.length === 0) return '';
+  return entries.some((entry) => entry.slug === queryKey) ? queryKey : '';
+}
+
+function resolveLobehubSlugStrict(slug) {
+  const queryKey = normalizeServiceAliasKey(slug);
+  if (!queryKey) return '';
+  const index = lobehubCache.entries?.size ? lobehubCache : ensureLobehubSyncIndex();
+  if (index.aliasToSlug?.has(queryKey)) {
+    const resolved = index.aliasToSlug.get(queryKey);
+    if (index.slugs?.has(resolved)) return resolved;
+  }
+  return index.slugs?.has(queryKey) ? queryKey : '';
+}
+
+// Resolves a domain-derived slug to a provider catalog slug for the HTML
+// scraper's service-icon buckets. Domain labels are arbitrary brand names, so
+// resolution is strict (exact slug / curated alias only) — never a fuzzy match,
+// which previously let e.g. maflplus.eu pull in the unrelated "mailplus" icon.
 function resolveServiceSlugForProviderSync(slug, provider) {
   const queryKey = normalizeServiceAliasKey(slug);
   if (!queryKey) return '';
   const staticHit = STATIC_PROVIDER_ALIASES[provider]?.[queryKey];
   if (staticHit) return staticHit;
   if (provider === 'dashboardicons') return resolveServiceSlugSync(slug);
-  if (provider === 'lobehub') return resolveLobehubSlugSync(slug);
-  if (provider === 'selfhst') return resolveSelfhstSlugSync(slug);
+  if (provider === 'lobehub') return resolveLobehubSlugStrict(slug);
+  if (provider === 'selfhst') return resolveSelfhstSlugStrict(slug);
   return '';
 }
 

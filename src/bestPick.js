@@ -102,13 +102,21 @@ function buildFallbackFetchers(domain) {
     all.logodev = () => fetchWithCache('logodev', domain, null, () => fetchLogoDev(domain));
   }
 
+  // Slug is derived from the domain label, so catalog lookups are resolved
+  // strictly (exact slug / curated alias) — never a fuzzy match that would pick
+  // a similarly-named but unrelated icon (e.g. maflplus.eu → "mailplus").
   const slug = serviceSlugFromDomain(domain);
   if (slug) {
-    all.selfhst = () => fetchWithCache('selfhst', slug, null, () => fetchSelfhst(slug));
+    all.selfhst = () =>
+      fetchWithCache('selfhst', slug, null, () => fetchSelfhst(slug, 'color', { strict: true }));
     all.dashboardicons = () =>
-      fetchWithCache('dashboardicons', slug, null, () => fetchDashboardIcons(slug));
+      fetchWithCache('dashboardicons', slug, null, () =>
+        fetchDashboardIcons(slug, 'color', { strict: true })
+      );
     all.lobehub = () =>
-      fetchWithCache('lobehub', slug, '128_c_v2', () => fetchLobehub(slug, 'color', 128));
+      fetchWithCache('lobehub', slug, '128_c_v2', () =>
+        fetchLobehub(slug, 'color', 128, { strict: true })
+      );
   }
 
   const defaultOrder = [

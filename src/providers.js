@@ -601,7 +601,7 @@ async function fetchServiceIcon(buildUrl, getCandidates, service, variant, provi
   return null;
 }
 
-async function fetchSelfhst(service, variant = 'color') {
+async function fetchSelfhst(service, variant = 'color', { strict = false } = {}) {
   const { entries } = await ensureSelfhstIndex();
   const entryBySlug = new Map(entries.map((entry) => [entry.slug, entry]));
 
@@ -622,7 +622,7 @@ async function fetchSelfhst(service, variant = 'color') {
     return null;
   }
 
-  const candidates = await getSelfhstSlugCandidates(service);
+  const candidates = await getSelfhstSlugCandidates(service, { strict });
   const variants = ['color', 'light', 'dark'];
 
   for (const slug of candidates) {
@@ -661,7 +661,7 @@ async function fetchSelfhst(service, variant = 'color') {
   return null;
 }
 
-async function fetchDashboardIcons(service, variant = 'color') {
+async function fetchDashboardIcons(service, variant = 'color', { strict = false } = {}) {
   if (variant !== 'color') {
     const slug = await resolveServiceSlug(service);
     const result = await fetchFavicon(PROVIDERS.dashboardIcons(slug, variant));
@@ -672,7 +672,7 @@ async function fetchDashboardIcons(service, variant = 'color') {
 
   return fetchServiceIcon(
     PROVIDERS.dashboardIcons,
-    getDashboardIconsSlugCandidates,
+    (s) => getDashboardIconsSlugCandidates(s, { strict }),
     service,
     variant,
     'dashboardicons'
@@ -718,9 +718,9 @@ async function rasterizeLobehubSvg(buffer, size, variant) {
   return png;
 }
 
-async function fetchLobehub(service, variant = 'color', size = 128) {
+async function fetchLobehub(service, variant = 'color', size = 128, { strict = false } = {}) {
   const index = await ensureLobehubIndex();
-  const candidates = await getLobehubSlugCandidates(service);
+  const candidates = await getLobehubSlugCandidates(service, { strict });
   const variants = [variant];
 
   for (const slug of candidates) {
@@ -1509,12 +1509,17 @@ async function fetchScraperCatalogFallback(domain) {
   const slug = serviceSlugFromDomain(domain);
   if (!slug) return null;
 
-  const selfhstResult = await fetchSelfhst(slug);
+  // The slug is derived from the domain label, not typed by a user, so resolve
+  // it strictly (exact catalog slug / curated alias only). A fuzzy match here
+  // would replace a site's real favicon with a similarly-named but unrelated
+  // catalog icon (e.g. maflplus.eu → "mailplus"); when there's no strict match
+  // we fall through to genuine HTML scraping instead.
+  const selfhstResult = await fetchSelfhst(slug, 'color', { strict: true });
   if (selfhstResult) {
     return normalizeFallbackResult(selfhstResult, 'scraper-fallback:selfhst');
   }
 
-  const dashResult = await fetchDashboardIcons(slug);
+  const dashResult = await fetchDashboardIcons(slug, 'color', { strict: true });
   if (dashResult) {
     return normalizeFallbackResult(dashResult, 'scraper-fallback:dashboardicons');
   }
