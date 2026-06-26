@@ -19,28 +19,32 @@ Browser tools: [faviconapi.com/#tools](https://faviconapi.com/#tools)
 
 ### Favicon providers - all run in parallel on `/{domain}`; each has its own route:
 
-| Provider | Route | Notes |
-|---|---|---|
-| HTML scraper | `/s/{domain}` | Parses `<link rel="icon">`, manifest, and fallbacks; optional [besticon](https://github.com/mat/besticon) sidecar via `BESTICON_URL` |
-| [Google](https://www.google.com/s2/favicons) | `/g/{size}/{domain}` | Sizes 16, 32, 64, 128 |
-| [Google v2](https://developers.google.com/search/docs/appearance/favicon-in-search) | `/g2/{size}/{domain}` | `faviconV2`; sizes 16, 32, 64, 128, 256 |
-| [DuckDuckGo](https://icons.duckduckgo.com/) | `/d/{domain}` | |
-| [Yandex](https://favicon.yandex.net/) | `/y/{domain}` | |
-| [Favicon.so](https://favicon.so/) | `/f/{domain}` | |
-| [Vemetric](https://favicon.vemetric.com/) | `/v/{domain}` | `?size=`, `?format=` |
-| [Favicon-3j1](https://favicon-3j1.pages.dev/) | `/p/{domain}` | |
-| [Faviconkit](https://faviconkit.net/) | `/k/{size}/{domain}` | Sizes 16, 32, 64, 128, 256 |
-| [logo.dev](https://www.logo.dev/) | `/l/{domain}` | Requires `LOGODEV_TOKEN` |
+All provider routes follow a single uniform scheme: **`/{provider}/{size}/{domain}`**. The short single-letter routes from earlier versions are kept as aliases. Providers without a native upstream size accept the size segment and are resized server-side.
+
+| Provider | Route | Alias | Notes |
+|---|---|---|---|
+| HTML scraper | `/scraper/{size}/{domain}` | `/s/` | `/scraper/{domain}` serves the largest available icon; parses `<link rel="icon">`, manifest, and fallbacks; optional [besticon](https://github.com/mat/besticon) sidecar via `BESTICON_URL` |
+| [Google](https://www.google.com/s2/favicons) | `/google/{size}/{domain}` | `/g/` | Sizes 16, 32, 64, 128 |
+| [Google v2](https://developers.google.com/search/docs/appearance/favicon-in-search) | `/googlev2/{size}/{domain}` | `/g2/` | `faviconV2`; sizes 16, 32, 64, 128, 256 |
+| [DuckDuckGo](https://icons.duckduckgo.com/) | `/duckduckgo/{size}/{domain}` | `/d/` | Resized server-side |
+| [Yandex](https://favicon.yandex.net/) | `/yandex/{size}/{domain}` | `/y/` | Resized server-side |
+| [Favicon.so](https://favicon.so/) | `/faviconso/{size}/{domain}` | `/f/` | Resized server-side |
+| [Vemetric](https://favicon.vemetric.com/) | `/vemetric/{size}/{domain}` | `/v/` | `?format=png\|jpg\|webp` |
+| [Favicon-3j1](https://favicon-3j1.pages.dev/) | `/favicondev/{size}/{domain}` | `/p/` | Resized server-side |
+| [Faviconkit](https://faviconkit.net/) | `/faviconkit/{size}/{domain}` | `/k/` | Sizes 16, 32, 64, 128, 256 |
+| [logo.dev](https://www.logo.dev/) | `/logodev/{size}/{domain}` | `/l/` | Requires `LOGODEV_TOKEN`; resized server-side |
+
+Resized-server-side providers accept sizes 16, 32, 64, 128, 256.
 
 **Service-icon catalogs** (lookup by service name, e.g. `jellyfin`):
 
-| Catalog | Route |
-|---|---|
-| [selfhst icons](https://github.com/selfhst/icons) | `/sh/{service}` |
-| [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) | `/di/{service}` |
-| [LobeHub icons](https://github.com/lobehub/lobe-icons) | `/lb/{service}` |
+| Catalog | Route | Alias |
+|---|---|---|
+| [selfhst icons](https://github.com/selfhst/icons) | `/selfhst/{size}/{service}` | `/sh/` |
+| [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) | `/dashboardicons/{size}/{service}` | `/di/` |
+| [LobeHub icons](https://github.com/lobehub/lobe-icons) | `/lobehub/{size}/{service}` | `/lb/` |
 
-Service routes support `?variant=color|light|dark` where applicable.
+Service routes support `?variant=color|light|dark` where applicable. LobeHub uses sizes 64, 128, 256; selfhst and Dashboard Icons are resized server-side (16, 32, 64, 128, 256). Legacy short aliases also accept the original sizeless form (e.g. `/sh/{service}`, `/d/{domain}`).
 
 Interactive API docs and a live playground: `/api` on a running instance.
 
@@ -129,17 +133,17 @@ All settings are documented in [`.env.example`](.env.example). Copy it to `.env`
 | `UPSTREAM_TIMEOUT` | `5000` | Upstream HTTP timeout (ms) for providers, besticon, and scrape targets. |
 | `UV_THREADPOOL_SIZE` | `16` | Node libuv thread pool size for disk I/O, DNS, etc. Must be set before process start. |
 | `WORKERS` | CPU core count | Number of cluster workers. Set explicitly in Docker when CPU is limited. `1` disables clustering. |
-| `SCRAPER_PROBE_BATCH_SIZE` | `4` | HTML scraper icon candidates probed in parallel per batch (`/s/{domain}` and `/{domain}`). |
+| `SCRAPER_PROBE_BATCH_SIZE` | `4` | HTML scraper icon candidates probed in parallel per batch (`/scraper/{domain}` and `/{domain}`). |
 | `PICK_HEAD_START_MS` | `150` | Head-start (ms) for `DEFAULT_PROVIDER` on `/{domain}` before other providers start. |
-| `LOGODEV_TOKEN` | _(unset)_ | [logo.dev](https://www.logo.dev/) publishable key. Enables `/l/{domain}`; without it the route returns 503. |
+| `LOGODEV_TOKEN` | _(unset)_ | [logo.dev](https://www.logo.dev/) publishable key. Enables `/logodev/{size}/{domain}`; without it the route returns 503. |
 | `DEFAULT_PROVIDER` | `scraper` | Preferred provider for `/{domain}` (gets the head-start). Values: `scraper`, `google`, `googlev2`, `duckduckgo`, `yandex`, `faviconso`, `vemetric`, `favicondev`, `faviconkit`, `logodev`, `selfhst`, `dashboardicons`, `lobehub`. `logodev` requires `LOGODEV_TOKEN`. |
-| `BESTICON_URL` | _(unset)_ | Base URL of a sidecar [besticon](https://github.com/mat/besticon) instance (e.g. `http://besticon:8080`). `/s/{domain}` asks besticon first, then falls back to the built-in scraper. |
+| `BESTICON_URL` | _(unset)_ | Base URL of a sidecar [besticon](https://github.com/mat/besticon) instance (e.g. `http://besticon:8080`). `/scraper/{domain}` asks besticon first, then falls back to the built-in scraper. |
 | `SCRAPER_ICONS_CACHE_TTL` | `3600` | TTL (seconds) for the in-memory cache of enriched scraper icon lists (`/{domain}/json`). Also used for scraper discovery disk cache entries when `SCRAPER_DISK_CACHE` is enabled. |
 | `SCRAPER_ICONS_CACHE_MAX` | `500` | Max domains in that scraper-icons LRU cache. |
 | `SCRAPER_DISK_CACHE` | `false` | When `true`, persist scraper discovery (HTML, icon lists, besticon JSON, manifests, probes) under `{CACHE_DIR}/scraper-discovery`. Survives restarts; shared across workers. |
 | `SCRAPER_DISK_CACHE_DIR` | `{CACHE_DIR}/scraper-discovery` | Directory for that discovery cache. Only used when `SCRAPER_DISK_CACHE=true`. |
 | `MANIFEST_PROBE_MAX` | `12` | Max manifest URLs to probe per domain when HTML does not link one directly. |
-| `SCRAPER_MAX_ICON_SIZE` | `0` | Max output dimension for `/s/{domain}`. Larger sources are downscaled; `0` = native resolution. |
+| `SCRAPER_MAX_ICON_SIZE` | `0` | Max output dimension for `/scraper/{domain}`. Larger sources are downscaled; `0` = native resolution. |
 | `API_KEYS_DB` | `/cache/api-keys.sqlite` | SQLite file for hashed API keys and monthly usage counters. Keep on the same volume as `CACHE_DIR`. |
 | `API_CACHE_DIR` | `/cache/api` | Directory for normalized 256×256 PNGs from `/api/v1/favicon`. Served via `/cdn/favicons/{domain}.png`. |
 | `API_CACHE_TTL` | `604800` | How long a generated PNG counts as cached (seconds, 7 days). Also used as `Cache-Control` max-age on the CDN route. |
@@ -150,34 +154,36 @@ All settings are documented in [`.env.example`](.env.example). Copy it to `.env`
 
 ## API overview
 
+All provider endpoints follow the uniform `/{provider}/{size}/{domain}` scheme; the short routes (`/g/`, `/d/`, …) are kept as aliases.
+
 | Endpoint | Description |
 |---|---|
 | `/{domain}` | Best favicon (parallel provider race) |
-| `/s/{domain}` | HTML scraper (or besticon when `BESTICON_URL` is set) |
-| `/g/{size}/{domain}` | Google favicon (16, 32, 64, 128) |
-| `/g2/{size}/{domain}` | Google v2 favicon (16, 32, 64, 128, 256) |
-| `/d/{domain}` | DuckDuckGo |
-| `/y/{domain}` | Yandex |
-| `/f/{domain}` | Favicon.so |
-| `/v/{domain}` | Vemetric (`?size=`, `?format=`) |
-| `/p/{domain}` | Favicon-3j1 |
-| `/k/{size}/{domain}` | Faviconkit (16, 32, 64, 128, 256) |
-| `/l/{domain}` | logo.dev (requires `LOGODEV_TOKEN`) |
-| `/sh/{service}` | selfhst icons (`?variant=color\|light\|dark`) |
-| `/di/{service}` | Dashboard Icons (`?variant=color\|light\|dark`) |
-| `/lb/{service}` | LobeHub icons (`?variant=color\|light\|dark`) |
+| `/scraper/{size}/{domain}` | HTML scraper (or besticon when `BESTICON_URL` is set); `/scraper/{domain}` = largest. Alias `/s/` |
+| `/google/{size}/{domain}` | Google favicon (16, 32, 64, 128). Alias `/g/` |
+| `/googlev2/{size}/{domain}` | Google v2 favicon (16, 32, 64, 128, 256). Alias `/g2/` |
+| `/duckduckgo/{size}/{domain}` | DuckDuckGo. Alias `/d/` |
+| `/yandex/{size}/{domain}` | Yandex. Alias `/y/` |
+| `/faviconso/{size}/{domain}` | Favicon.so. Alias `/f/` |
+| `/vemetric/{size}/{domain}` | Vemetric (`?format=`). Alias `/v/` |
+| `/favicondev/{size}/{domain}` | Favicon-3j1. Alias `/p/` |
+| `/faviconkit/{size}/{domain}` | Faviconkit (16, 32, 64, 128, 256). Alias `/k/` |
+| `/logodev/{size}/{domain}` | logo.dev (requires `LOGODEV_TOKEN`). Alias `/l/` |
+| `/selfhst/{size}/{service}` | selfhst icons (`?variant=color\|light\|dark`). Alias `/sh/` |
+| `/dashboardicons/{size}/{service}` | Dashboard Icons (`?variant=color\|light\|dark`). Alias `/di/` |
+| `/lobehub/{size}/{service}` | LobeHub icons (64, 128, 256; `?variant=color\|light\|dark`). Alias `/lb/` |
 | `/{domain}/json` | JSON list of all endpoint URLs for a domain |
 | `/api/v1/favicon?url=` | FaviconAPIs-compatible JSON API — see below |
 | `/cdn/favicons/{domain}.png` | Public CDN route for cached API v1 PNGs |
 | `/providers` | JSON: which optional providers are enabled |
 | `/search?q=` | Custom search engine redirect to the homepage |
 
-**Examples:** `https://your-host/github.com` · `https://your-host/s/github.com` · `https://your-host/sh/jellyfin`
+**Examples:** `https://your-host/github.com` · `https://your-host/scraper/github.com` · `https://your-host/google/64/github.com` · `https://your-host/selfhst/128/jellyfin`
 
 ### Scraper cache bypass
 
 ```
-https://your-host/s/{domain}?refresh=1
+https://your-host/scraper/{domain}?refresh=1
 ```
 
 Forces a fresh scrape by clearing the cached scraper entry (memory and disk) before fetching again. Use when a site changed its favicon, after scraper fixes, or when debugging stale results. `?nocache=1` is an alias for `?refresh=1`.

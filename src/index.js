@@ -24,6 +24,7 @@ const {
   fetchScraperAsset,
   fetchScraperAllIcons,
   getScraperMaxIconSize,
+  capScraperProxyOutput,
   getScraperFallback,
   invalidateScraperDomainCaches,
   PROVIDERS,
@@ -39,7 +40,7 @@ const {
   getLobehubVariantAvailability,
 } = require('./serviceAliases');
 const { serviceSlugFromDomain, listDomainIconTags } = require('./serviceSlugFromDomain');
-const { toDisplayPng, resizeIcon, rasterizeSvgToSize } = require('./imageNormalize');
+const { toDisplayPng, resizeIcon, rasterizeSvgToSize, readImageDimensions, looksLikeSvg } = require('./imageNormalize');
 const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
@@ -205,6 +206,24 @@ const VALID_DASHBOARDICONS_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_LOBEHUB_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_LOBEHUB_SIZES = new Set([64, 128, 256]);
 const DEFAULT_LOBEHUB_SIZE = 128;
+
+// Uniform proxy-URL scheme: baseurl/{provider}/{size}/{domain}. Providers
+// without a native upstream size accept the path size segment and are resized
+// server-side; the offered set + sensible default sizes are defined here.
+const RESIZE_SIZES = new Set([16, 32, 64, 128, 256]);
+const RESIZE_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const CATALOG_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const GOOGLE_SIZES_ARRAY = [16, 32, 64, 128];
+const GOOGLEV2_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const FAVICONKIT_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const VEMETRIC_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const LOBEHUB_SIZES_ARRAY = [64, 128, 256];
+// Default size for each provider's top-level `proxy` URL. Native providers
+// default to 128; the resize-based domain providers default to 64 to avoid
+// upscaling their typically small source icons.
+const DEFAULT_NATIVE_SIZE = 128;
+const DEFAULT_RESIZE_SIZE = 64;
+const DEFAULT_CATALOG_SIZE = 128;
 const SERVICE_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/;
 const CACHE_CONTROL = 'public, max-age=86400';
 const JSON_CACHE_CONTROL = 'no-cache';
@@ -246,55 +265,50 @@ function parseDomainOrService(raw) {
   return null;
 }
 
-function buildCatalogVariantEndpoints(host, routePrefix, slug, sourceFn, availability) {
-  if (!slug || !availability) return null;
+// Build a uniform catalog-provider block under the canonical
+// /{provider}/{size}/{slug}[?variant=] scheme. `sizes` lists the offered set,
+// `defaultSize` is used for the top-level + variant proxy URLs. `variant`
+// stays a query parameter because it is a separate dimension from size.
+function buildCatalogBlock(host, routeName, slug, sourceFn, availability, sizes, defaultSize) {
+  if (!slug || !availability || !availability.color) return null;
 
   const encoded = encodeURIComponent(slug);
-  const proxyBase = `${host}/${routePrefix}/${encoded}`;
+  const proxyFor = (size, variant) => {
+    const base = `${host}/${routeName}/${size}/${encoded}`;
+    return variant && variant !== 'color' ? `${base}?variant=${variant}` : base;
+  };
+
   const variants = {};
-
-  if (availability.color) {
-    variants.color = {
-      proxy: proxyBase,
-      source: sourceFn(slug, 'color'),
-    };
-  }
-  if (availability.light) {
-    variants.light = {
-      proxy: `${proxyBase}?variant=light`,
-      source: sourceFn(slug, 'light'),
-    };
-  }
-  if (availability.dark) {
-    variants.dark = {
-      proxy: `${proxyBase}?variant=dark`,
-      source: sourceFn(slug, 'dark'),
-    };
+  for (const variant of ['color', 'light', 'dark']) {
+    if (availability[variant]) {
+      variants[variant] = {
+        proxy: proxyFor(defaultSize, variant),
+        source: sourceFn(slug, variant),
+      };
+    }
   }
 
-  if (!variants.color) return null;
+  const sizesMap = Object.fromEntries(
+    sizes.map((size) => [
+      String(size),
+      { proxy: proxyFor(size, 'color'), source: sourceFn(slug, 'color') },
+    ])
+  );
 
   return {
     service: slug,
-    proxy: variants.color.proxy,
-    source: variants.color.source,
+    proxy: proxyFor(defaultSize, 'color'),
+    source: sourceFn(slug, 'color'),
+    sizes: sizesMap,
     variants,
   };
 }
 
 function emptyCatalogProvider() {
-  return { service: null, query: null, proxy: null, source: null, variants: null };
+  return { service: null, query: null, proxy: null, source: null, sizes: null, variants: null };
 }
 
 async function buildServiceCatalogEndpoints(host, query, selfhstServiceSlug, dashboardServiceSlug, lobehubServiceSlug) {
-  const sizedEntries = (sizes, proxyPath, sourceFn) =>
-    Object.fromEntries(
-      sizes.map((size) => [
-        String(size),
-        { proxy: `${host}${proxyPath(size)}`, source: sourceFn(size) },
-      ])
-    );
-
   const [selfhstAvailability, dashboardAvailability, lobehubAvailability] = await Promise.all([
     selfhstServiceSlug
       ? getSelfhstVariantAvailability(selfhstServiceSlug)
@@ -307,69 +321,126 @@ async function buildServiceCatalogEndpoints(host, query, selfhstServiceSlug, das
       : Promise.resolve(null),
   ]);
 
-  const selfhstBlock = buildCatalogVariantEndpoints(
+  const selfhstBlock = buildCatalogBlock(
     host,
-    'sh',
+    'selfhst',
     selfhstServiceSlug,
     PROVIDERS.selfhst,
-    selfhstAvailability
+    selfhstAvailability,
+    CATALOG_SIZES_ARRAY,
+    DEFAULT_CATALOG_SIZE
   );
-  const selfhst = selfhstBlock
-    ? { ...selfhstBlock, query }
-    : emptyCatalogProvider();
+  const selfhst = selfhstBlock ? { ...selfhstBlock, query } : emptyCatalogProvider();
 
-  const dashboardBlock = buildCatalogVariantEndpoints(
+  const dashboardBlock = buildCatalogBlock(
     host,
-    'di',
+    'dashboardicons',
     dashboardServiceSlug,
     PROVIDERS.dashboardIcons,
-    dashboardAvailability
+    dashboardAvailability,
+    CATALOG_SIZES_ARRAY,
+    DEFAULT_CATALOG_SIZE
   );
-  const dashboardicons = dashboardBlock
-    ? { ...dashboardBlock, query }
-    : emptyCatalogProvider();
+  const dashboardicons = dashboardBlock ? { ...dashboardBlock, query } : emptyCatalogProvider();
 
-  const lobehubAvailabilityResolved = lobehubAvailability;
-  const lobehubBlock = buildCatalogVariantEndpoints(
+  const lobehubBlock = buildCatalogBlock(
     host,
-    'lb',
+    'lobehub',
     lobehubServiceSlug,
     PROVIDERS.lobehub,
-    lobehubAvailabilityResolved
+    lobehubAvailability,
+    LOBEHUB_SIZES_ARRAY,
+    DEFAULT_LOBEHUB_SIZE
   );
-  const lobehubSizes = [64, 128, 256];
-  const lobehubSlugEncoded = lobehubServiceSlug
-    ? encodeURIComponent(lobehubServiceSlug)
-    : null;
-  const lobehub = lobehubBlock
-    ? {
-        ...lobehubBlock,
-        query,
-        proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}`,
-        sizes: sizedEntries(
-          lobehubSizes,
-          (size) => `/lb/${lobehubSlugEncoded}?size=${size}`,
-          () => PROVIDERS.lobehub(lobehubServiceSlug)
-        ),
-        variants: Object.fromEntries(
-          Object.entries(lobehubBlock.variants).map(([variant, entry]) => [
-            variant,
-            {
-              proxy: `${host}/lb/${lobehubSlugEncoded}?size=${DEFAULT_LOBEHUB_SIZE}${
-                variant === 'color' ? '' : `&variant=${variant}`
-              }`,
-              source: entry.source,
-            },
-          ])
-        ),
-      }
-    : { ...emptyCatalogProvider(), sizes: null };
+  const lobehub = lobehubBlock ? { ...lobehubBlock, query } : emptyCatalogProvider();
 
   return { selfhst, dashboardicons, lobehub };
 }
 
-// Google favicon proxy: /g/:size/:domain
-app.get('/g/:size/:domain', async (req, res) => {
+// Downscale an icon to `size` only when its source is larger. Upscaling a small
+// upstream icon (e.g. Yandex's fixed 16x16) just produces a blurry result, so
+// when the source is already <= the requested size the native bytes are served
+// unchanged. Returns the (possibly resized) entry.
+async function downscaleEntryToSize(entry, size) {
+  try {
+    const dims = await readImageDimensions(entry.buffer, {
+      contentType: entry.contentType,
+      url: entry.url,
+    });
+    const side = dims ? Math.min(dims.width || 0, dims.height || dims.width || 0) : 0;
+    if (side > size) {
+      const buffer = await resizeIcon(entry.buffer, size);
+      return { ...entry, buffer, contentType: 'image/png' };
+    }
+  } catch {
+    /* fall through and serve native bytes */
+  }
+  return entry;
+}
+
+// Render an icon at `size`. SVG sources (e.g. Vemetric always returns a small
+// intrinsic SVG) are rasterized to a crisp size×size PNG so they fill the card
+// like the other providers instead of rendering at their tiny intrinsic size.
+// Raster sources are only downscaled, never upscaled.
+async function renderIconToSize(entry, size) {
+  const contentType = (entry.contentType || '').toLowerCase();
+  const isSvg = contentType.includes('svg') || looksLikeSvg(entry.buffer);
+  if (isSvg) {
+    try {
+      const buffer = await rasterizeSvgToSize(entry.buffer, size);
+      return { ...entry, buffer, contentType: 'image/png' };
+    } catch {
+      return entry;
+    }
+  }
+  return downscaleEntryToSize(entry, size);
+}
+
+// Server-side resize handler factory for providers without a native upstream
+// size parameter. The base icon is fetched (and cached unsized), then downscaled
+// to the requested path size (never upscaled) so the canonical
+// /{provider}/{size}/{domain} scheme stays meaningful without blurring.
+function makeResizeProviderHandler(providerKey, label, fetchFn) {
+  return async (req, res) => {
+    const size = parseInt(req.params.size, 10);
+    if (!RESIZE_SIZES.has(size)) {
+      return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+    }
+
+    const domain = extractDomain(req.params.domain);
+    if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+    try {
+      const entry = await fetchWithCache(providerKey, domain, null, () => fetchFn(domain));
+      if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+      sendFavicon(res, await downscaleEntryToSize(entry, size));
+    } catch (err) {
+      console.error(`${label} proxy error:`, err.message);
+      res.status(500).json({ error: 'Internal error.' });
+    }
+  };
+}
+
+// Legacy (sizeless, native-resolution) handler factory for the original short
+// routes, kept as aliases so existing URLs/bookmarks keep working unchanged.
+function makeNativeProviderHandler(providerKey, label, fetchFn) {
+  return async (req, res) => {
+    const domain = extractDomain(req.params.domain);
+    if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+    try {
+      const entry = await fetchWithCache(providerKey, domain, null, () => fetchFn(domain));
+      if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+      sendFavicon(res, entry);
+    } catch (err) {
+      console.error(`${label} proxy error:`, err.message);
+      res.status(500).json({ error: 'Internal error.' });
+    }
+  };
+}
+
+// Google favicon proxy: /google/:size/:domain (alias: /g/:size/:domain)
+app.get(['/google/:size/:domain', '/g/:size/:domain'], async (req, res) => {
   const size = parseInt(req.params.size, 10);
   if (!VALID_GOOGLE_SIZES.has(size)) {
     return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, or 128.' });
@@ -388,8 +459,8 @@ app.get('/g/:size/:domain', async (req, res) => {
   }
 });
 
-// Google v2 favicon proxy: /g2/:size/:domain
-app.get('/g2/:size/:domain', async (req, res) => {
+// Google v2 favicon proxy: /googlev2/:size/:domain (alias: /g2/:size/:domain)
+app.get(['/googlev2/:size/:domain', '/g2/:size/:domain'], async (req, res) => {
   const size = parseInt(req.params.size, 10);
   if (!VALID_GOOGLEV2_SIZES.has(size)) {
     return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
@@ -408,52 +479,59 @@ app.get('/g2/:size/:domain', async (req, res) => {
   }
 });
 
-// DuckDuckGo favicon proxy: /d/:domain
-app.get('/d/:domain', async (req, res) => {
+// DuckDuckGo favicon proxy: /duckduckgo/:size/:domain (alias: /d/:size/:domain)
+// Legacy native-resolution route /d/:domain kept as an alias.
+app.get(
+  ['/duckduckgo/:size/:domain', '/d/:size/:domain'],
+  makeResizeProviderHandler('duckduckgo', 'DuckDuckGo', fetchDuckDuckGo)
+);
+app.get('/d/:domain', makeNativeProviderHandler('duckduckgo', 'DuckDuckGo', fetchDuckDuckGo));
+
+// Yandex favicon proxy: /yandex/:size/:domain (alias: /y/:size/:domain)
+app.get(
+  ['/yandex/:size/:domain', '/y/:size/:domain'],
+  makeResizeProviderHandler('yandex', 'Yandex', fetchYandex)
+);
+app.get('/y/:domain', makeNativeProviderHandler('yandex', 'Yandex', fetchYandex));
+
+// Favicon.so proxy: /faviconso/:size/:domain (alias: /f/:size/:domain)
+app.get(
+  ['/faviconso/:size/:domain', '/f/:size/:domain'],
+  makeResizeProviderHandler('faviconso', 'Favicon.so', fetchFaviconSo)
+);
+app.get('/f/:domain', makeNativeProviderHandler('faviconso', 'Favicon.so', fetchFaviconSo));
+
+// Vemetric favicon proxy: /vemetric/:size/:domain (alias: /v/:size/:domain)
+// Native upstream size; `?format=png|jpg|webp` stays a query parameter.
+// Legacy /v/:domain (with optional ?size= & ?format=) kept as an alias.
+async function vemetricSizedHandler(req, res) {
+  const size = parseInt(req.params.size, 10);
+  if (!VALID_GOOGLEV2_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  }
+
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
-  try {
-    const entry = await fetchWithCache('duckduckgo', domain, null, () => fetchDuckDuckGo(domain));
-    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, entry);
-  } catch (err) {
-    console.error('DuckDuckGo proxy error:', err.message);
-    res.status(500).json({ error: 'Internal error.' });
+  const format = req.query.format || null;
+  if (format && !VALID_VEMETRIC_FORMATS.has(format)) {
+    return res.status(400).json({ error: 'Invalid format. Use png, jpg, or webp.' });
   }
-});
-
-// Yandex favicon proxy: /y/:domain
-app.get('/y/:domain', async (req, res) => {
-  const domain = extractDomain(req.params.domain);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
   try {
-    const entry = await fetchWithCache('yandex', domain, null, () => fetchYandex(domain));
+    const cacheKey = format ? `${size}_${format}` : String(size);
+    const entry = await fetchWithCache('vemetric', domain, cacheKey, () => fetchVemetric(domain, size, format));
     if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, entry);
+    // With an explicit format the caller asked for that exact raster; serve it
+    // unchanged. Otherwise render to the requested size (Vemetric returns SVG).
+    sendFavicon(res, format ? entry : await renderIconToSize(entry, size));
   } catch (err) {
-    console.error('Yandex proxy error:', err.message);
+    console.error('Vemetric proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
   }
-});
+}
+app.get(['/vemetric/:size/:domain', '/v/:size/:domain'], vemetricSizedHandler);
 
-// Favicon.so proxy: /f/:domain
-app.get('/f/:domain', async (req, res) => {
-  const domain = extractDomain(req.params.domain);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
-
-  try {
-    const entry = await fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain));
-    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, entry);
-  } catch (err) {
-    console.error('Favicon.so proxy error:', err.message);
-    res.status(500).json({ error: 'Internal error.' });
-  }
-});
-
-// Vemetric favicon proxy: /v/:domain
 app.get('/v/:domain', async (req, res) => {
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
@@ -469,30 +547,22 @@ app.get('/v/:domain', async (req, res) => {
     const cacheSize = size || format || null;
     const entry = await fetchWithCache('vemetric', domain, cacheSize, () => fetchVemetric(domain, size, format));
     if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, entry);
+    sendFavicon(res, format ? entry : await renderIconToSize(entry, size || DEFAULT_NATIVE_SIZE));
   } catch (err) {
     console.error('Vemetric proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
   }
 });
 
-// Favicon-3j1 proxy: /p/:domain
-app.get('/p/:domain', async (req, res) => {
-  const domain = extractDomain(req.params.domain);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+// Favicon-3j1 proxy: /favicondev/:size/:domain (alias: /p/:size/:domain)
+app.get(
+  ['/favicondev/:size/:domain', '/p/:size/:domain'],
+  makeResizeProviderHandler('favicondev', 'Favicon-3j1', fetchFaviconDev)
+);
+app.get('/p/:domain', makeNativeProviderHandler('favicondev', 'Favicon-3j1', fetchFaviconDev));
 
-  try {
-    const entry = await fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain));
-    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, entry);
-  } catch (err) {
-    console.error('Favicon-3j1 proxy error:', err.message);
-    res.status(500).json({ error: 'Internal error.' });
-  }
-});
-
-// Faviconkit proxy: /k/:size/:domain
-app.get('/k/:size/:domain', async (req, res) => {
+// Faviconkit proxy: /faviconkit/:size/:domain (alias: /k/:size/:domain)
+app.get(['/faviconkit/:size/:domain', '/k/:size/:domain'], async (req, res) => {
   const size = parseInt(req.params.size, 10);
   if (!VALID_FAVICONKIT_SIZES.has(size)) {
     return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
@@ -511,7 +581,31 @@ app.get('/k/:size/:domain', async (req, res) => {
   }
 });
 
-// logo.dev proxy: /l/:domain (requires LOGODEV_TOKEN)
+// logo.dev proxy: /logodev/:size/:domain (alias: /l/:size/:domain) - requires LOGODEV_TOKEN
+async function logoDevSizedHandler(req, res) {
+  if (!process.env.LOGODEV_TOKEN) {
+    return res.status(503).json({ error: 'logo.dev not configured. Set LOGODEV_TOKEN.' });
+  }
+
+  const size = parseInt(req.params.size, 10);
+  if (!RESIZE_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  }
+
+  const domain = extractDomain(req.params.domain);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+  try {
+    const entry = await fetchWithCache('logodev', domain, null, () => fetchLogoDev(domain));
+    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+    sendFavicon(res, await downscaleEntryToSize(entry, size));
+  } catch (err) {
+    console.error('logo.dev proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+}
+app.get(['/logodev/:size/:domain', '/l/:size/:domain'], logoDevSizedHandler);
+
 app.get('/l/:domain', async (req, res) => {
   if (!process.env.LOGODEV_TOKEN) {
     return res.status(503).json({ error: 'logo.dev not configured. Set LOGODEV_TOKEN.' });
@@ -588,13 +682,20 @@ app.get('/s-asset', async (req, res) => {
   }
 });
 
-// HTML scraper proxy: /s/:domain[?size=128&refresh=1]
-app.get('/s/:domain', async (req, res) => {
+// HTML scraper proxy.
+//   Canonical: /scraper/:size/:domain        (sized)
+//              /scraper/:domain              (auto / largest available)
+//   Aliases:   /s/:domain[?size=128]         (legacy)
+// `?refresh=1` (or `?nocache=1`) bypasses + invalidates the caches.
+async function scraperHandler(req, res) {
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
   const refresh = req.query.refresh === '1' || req.query.nocache === '1';
-  const sizeParam = req.query.size ? parseInt(req.query.size, 10) : 0;
+  // Size from the path segment takes precedence over the legacy ?size= query.
+  const pathSize = req.params.size ? parseInt(req.params.size, 10) : 0;
+  const querySize = req.query.size ? parseInt(req.query.size, 10) : 0;
+  const sizeParam = pathSize || querySize;
 
   if (sizeParam && (sizeParam < 1 || sizeParam > 1024)) {
     return res.status(400).json({ error: 'Invalid size. Use a value between 1 and 1024.' });
@@ -619,12 +720,19 @@ app.get('/s/:domain', async (req, res) => {
       return sendFavicon(res, { ...entry, buffer: buf, contentType: 'image/png' });
     }
 
-    sendFavicon(res, entry);
+    // Enforce SCRAPER_MAX_ICON_SIZE at serve time too, not just when the icon is
+    // first fetched/cached. A cache entry written before the cap was configured
+    // (e.g. a full 512px source) would otherwise keep being served at full size;
+    // capScraperProxyOutput downscales it (and is a no-op when already within the
+    // cap or when the cap is disabled).
+    sendFavicon(res, await capScraperProxyOutput(entry));
   } catch (err) {
     console.error('Scraper proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
   }
-});
+}
+app.get(['/scraper/:size/:domain', '/s/:size/:domain'], scraperHandler);
+app.get(['/scraper/:domain', '/s/:domain'], scraperHandler);
 
 async function serveSizedScraperIcon(domain, size) {
   let allIcons;
@@ -696,7 +804,35 @@ app.get('/services/resolve/:service', async (req, res) => {
   }
 });
 
-// selfhst icons (service-name based): /sh/:service[?variant=color|light|dark]
+// selfhst icons (service-name based).
+//   Canonical: /selfhst/:size/:service[?variant=color|light|dark]
+//   Aliases:   /sh/:size/:service, /sh/:service (legacy, native resolution)
+async function selfhstSizedHandler(req, res) {
+  const service = extractService(req.params.service);
+  if (!service) return res.status(400).json({ error: 'Invalid service name.' });
+
+  const size = parseInt(req.params.size, 10);
+  if (!RESIZE_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  }
+
+  const variant = (req.query.variant || 'color').toString().toLowerCase();
+  if (!VALID_SELFHST_VARIANTS.has(variant)) {
+    return res.status(400).json({ error: 'Invalid variant. Use color, light, or dark.' });
+  }
+
+  try {
+    const cacheKey = variant === 'color' ? null : `${variant}_v3`;
+    const entry = await fetchWithCache('selfhst', service, cacheKey, () => fetchSelfhst(service, variant));
+    if (!entry) return res.status(404).json({ error: 'Service icon not found.' });
+    sendFavicon(res, await downscaleEntryToSize(entry, size));
+  } catch (err) {
+    console.error('selfhst proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+}
+app.get(['/selfhst/:size/:service', '/sh/:size/:service'], selfhstSizedHandler);
+
 app.get('/sh/:service', async (req, res) => {
   const service = extractService(req.params.service);
   if (!service) return res.status(400).json({ error: 'Invalid service name.' });
@@ -717,7 +853,40 @@ app.get('/sh/:service', async (req, res) => {
   }
 });
 
-// homarr-labs/dashboard-icons (service-name based): /di/:service[?variant=color|light|dark]
+// homarr-labs/dashboard-icons (service-name based).
+//   Canonical: /dashboardicons/:size/:service[?variant=color|light|dark]
+//   Aliases:   /di/:size/:service, /di/:service (legacy, native resolution)
+async function dashboardIconsSizedHandler(req, res) {
+  const service = extractService(req.params.service);
+  if (!service) return res.status(400).json({ error: 'Invalid service name.' });
+
+  const size = parseInt(req.params.size, 10);
+  if (!RESIZE_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  }
+
+  const variant = (req.query.variant || 'color').toString().toLowerCase();
+  if (!VALID_DASHBOARDICONS_VARIANTS.has(variant)) {
+    return res.status(400).json({ error: 'Invalid variant. Use color, light, or dark.' });
+  }
+
+  try {
+    const cacheKey = variant === 'color' ? null : `${variant}_v3`;
+    const entry = await fetchWithCache(
+      'dashboardicons',
+      service,
+      cacheKey,
+      () => fetchDashboardIcons(service, variant)
+    );
+    if (!entry) return res.status(404).json({ error: 'Service icon not found.' });
+    sendFavicon(res, await downscaleEntryToSize(entry, size));
+  } catch (err) {
+    console.error('Dashboard Icons proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+}
+app.get(['/dashboardicons/:size/:service', '/di/:size/:service'], dashboardIconsSizedHandler);
+
 app.get('/di/:service', async (req, res) => {
   const service = extractService(req.params.service);
   if (!service) return res.status(400).json({ error: 'Invalid service name.' });
@@ -743,7 +912,40 @@ app.get('/di/:service', async (req, res) => {
   }
 });
 
-// LobeHub icons (service-name based): /lb/:service[?variant=color|light|dark][&size=64|128|256]
+// LobeHub icons (service-name based). Native sizes 64, 128, 256.
+//   Canonical: /lobehub/:size/:service[?variant=color|light|dark]
+//   Aliases:   /lb/:size/:service, /lb/:service[?size=][&variant=] (legacy)
+async function lobehubSizedHandler(req, res) {
+  const service = extractService(req.params.service);
+  if (!service) return res.status(400).json({ error: 'Invalid service name.' });
+
+  const size = parseInt(req.params.size, 10);
+  if (!VALID_LOBEHUB_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 64, 128, or 256.' });
+  }
+
+  const variant = (req.query.variant || 'color').toString().toLowerCase();
+  if (!VALID_LOBEHUB_VARIANTS.has(variant)) {
+    return res.status(400).json({ error: 'Invalid variant. Use color, light, or dark.' });
+  }
+
+  try {
+    const cacheKey = `${size}_${variant === 'color' ? 'c' : variant}_v3`;
+    const entry = await fetchWithCache(
+      'lobehub',
+      service,
+      cacheKey,
+      () => fetchLobehub(service, variant, size)
+    );
+    if (!entry) return res.status(404).json({ error: 'Service icon not found.' });
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('LobeHub proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+}
+app.get(['/lobehub/:size/:service', '/lb/:size/:service'], lobehubSizedHandler);
+
 app.get('/lb/:service', async (req, res) => {
   const service = extractService(req.params.service);
   if (!service) return res.status(400).json({ error: 'Invalid service name.' });
@@ -857,15 +1059,11 @@ app.get('/:domain/json', async (req, res) => {
       wwwFallback = {
         domain: wwwDomain,
         icons: wwwIcons,
-        proxy: `${req.protocol}://${req.get('host')}/s/${encodeURIComponent(wwwDomain)}`,
+        proxy: `${req.protocol}://${req.get('host')}/scraper/${encodeURIComponent(wwwDomain)}`,
       };
     }
   }
 
-  const googleSizes = [16, 32, 64, 128];
-  const googleV2Sizes = [16, 32, 64, 128, 256];
-  const faviconkitSizes = [16, 32, 64, 128, 256];
-  const vemetricSizes = [16, 32, 64, 128, 256];
   const vemetricFormats = ['png', 'jpg', 'webp'];
 
   const sizedEntries = (sizes, proxyPath, sourceFn) =>
@@ -876,22 +1074,28 @@ app.get('/:domain/json', async (req, res) => {
       ])
     );
 
+  // Uniform domain-provider block under the canonical
+  // baseurl/{provider}/{size}/{domain} scheme. `proxy` points at the default
+  // size; `sizes` lists every offered size.
+  const uniformProvider = (name, sizes, defaultSize, sourceFn) => ({
+    proxy: `${host}/${name}/${defaultSize}/${encoded}`,
+    source: sourceFn(defaultSize),
+    sizes: sizedEntries(sizes, (size) => `/${name}/${size}/${encoded}`, sourceFn),
+  });
+
   const vemetricVariants = {
-    default: {
-      proxy: `${host}/v/${encoded}`,
-      source: PROVIDERS.vemetric(domain),
-    },
-    sizes: sizedEntries(
-      vemetricSizes,
-      (size) => `/v/${encoded}?size=${size}`,
+    ...uniformProvider(
+      'vemetric',
+      VEMETRIC_SIZES_ARRAY,
+      DEFAULT_NATIVE_SIZE,
       (size) => PROVIDERS.vemetric(domain, size)
     ),
     formats: Object.fromEntries(
       vemetricFormats.map((format) => [
         format,
         {
-          proxy: `${host}/v/${encoded}?format=${format}`,
-          source: PROVIDERS.vemetric(domain, null, format),
+          proxy: `${host}/vemetric/${DEFAULT_NATIVE_SIZE}/${encoded}?format=${format}`,
+          source: PROVIDERS.vemetric(domain, DEFAULT_NATIVE_SIZE, format),
         },
       ])
     ),
@@ -899,10 +1103,15 @@ app.get('/:domain/json', async (req, res) => {
 
   const logoDevConfigured = !!process.env.LOGODEV_TOKEN;
   const logodev = {
-    proxy: `${host}/l/${encoded}`,
+    proxy: `${host}/logodev/${DEFAULT_RESIZE_SIZE}/${encoded}`,
     // Omit upstream URL: it embeds LOGODEV_TOKEN in the query string.
     source: null,
     configured: logoDevConfigured,
+    sizes: sizedEntries(
+      RESIZE_SIZES_ARRAY,
+      (size) => `/logodev/${size}/${encoded}`,
+      () => null
+    ),
   };
 
   const serviceSlug = serviceSlugFromDomain(domain);
@@ -933,46 +1142,57 @@ app.get('/:domain/json', async (req, res) => {
         proxy: `${host}/${encoded}`,
         source: null,
       },
-      google: sizedEntries(
-        googleSizes,
-        (size) => `/g/${size}/${encoded}`,
+      google: uniformProvider(
+        'google',
+        GOOGLE_SIZES_ARRAY,
+        DEFAULT_NATIVE_SIZE,
         (size) => PROVIDERS.google(domain, size)
       ),
-      googlev2: sizedEntries(
-        googleV2Sizes,
-        (size) => `/g2/${size}/${encoded}`,
+      googlev2: uniformProvider(
+        'googlev2',
+        GOOGLEV2_SIZES_ARRAY,
+        DEFAULT_NATIVE_SIZE,
         (size) => PROVIDERS.googleV2(domain, size)
       ),
-      duckduckgo: {
-        proxy: `${host}/d/${encoded}`,
-        source: PROVIDERS.duckduckgo(domain),
-      },
-      yandex: {
-        proxy: `${host}/y/${encoded}`,
-        source: PROVIDERS.yandex(domain),
-      },
-      faviconso: {
-        proxy: `${host}/f/${encoded}`,
-        source: PROVIDERS.faviconSo(domain),
-      },
+      duckduckgo: uniformProvider(
+        'duckduckgo',
+        RESIZE_SIZES_ARRAY,
+        DEFAULT_RESIZE_SIZE,
+        () => PROVIDERS.duckduckgo(domain)
+      ),
+      yandex: uniformProvider(
+        'yandex',
+        RESIZE_SIZES_ARRAY,
+        DEFAULT_RESIZE_SIZE,
+        () => PROVIDERS.yandex(domain)
+      ),
+      faviconso: uniformProvider(
+        'faviconso',
+        RESIZE_SIZES_ARRAY,
+        DEFAULT_RESIZE_SIZE,
+        () => PROVIDERS.faviconSo(domain)
+      ),
       vemetric: vemetricVariants,
-      favicondev: {
-        proxy: `${host}/p/${encoded}`,
-        source: PROVIDERS.faviconDev(domain),
-      },
-      faviconkit: sizedEntries(
-        faviconkitSizes,
-        (size) => `/k/${size}/${encoded}`,
+      favicondev: uniformProvider(
+        'favicondev',
+        RESIZE_SIZES_ARRAY,
+        DEFAULT_RESIZE_SIZE,
+        () => PROVIDERS.faviconDev(domain)
+      ),
+      faviconkit: uniformProvider(
+        'faviconkit',
+        FAVICONKIT_SIZES_ARRAY,
+        DEFAULT_NATIVE_SIZE,
         (size) => PROVIDERS.faviconkit(domain, size)
       ),
       logodev,
       scraper: {
-        proxy: `${host}/s/${encoded}`,
+        proxy: `${host}/scraper/${encoded}`,
         source: scraperCached?.url || null,
         sizes: Object.fromEntries(
           SCRAPER_SIZES_ARRAY.map((size) => [
             String(size),
-            { proxy: `${host}/s/${encoded}?size=${size}`, source: scraperCached?.url || null },
+            { proxy: `${host}/scraper/${size}/${encoded}`, source: scraperCached?.url || null },
           ])
         ),
         maxIconSize: getScraperMaxIconSize(),
@@ -982,14 +1202,14 @@ app.get('/:domain/json', async (req, res) => {
           : null,
         icons: scraperAllIcons.map((icon) => ({
           ...icon,
-          proxy: `${host}/s/${encoded}?size=${icon.width || 128}`,
+          proxy: `${host}/scraper/${icon.width || 128}/${encoded}`,
         })),
         wwwFallback: wwwFallback
           ? {
               ...wwwFallback,
               icons: (wwwFallback.icons || []).map((icon) => ({
                 ...icon,
-                proxy: `${host}/s/${encodeURIComponent(wwwFallback.domain)}?size=${icon.width || 128}`,
+                proxy: `${host}/scraper/${icon.width || 128}/${encodeURIComponent(wwwFallback.domain)}`,
               })),
             }
           : null,

@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.3.0] — 2026-06-26
+
+### Changed
+
+- **Uniform proxy-URL scheme `/{provider}/{size}/{domain}`** — every provider route now follows the same consistent shape with a leading full provider name and a size path segment: `/google/{size}/{domain}`, `/googlev2/{size}/{domain}`, `/duckduckgo/{size}/{domain}`, `/yandex/{size}/{domain}`, `/faviconso/{size}/{domain}`, `/vemetric/{size}/{domain}`, `/favicondev/{size}/{domain}`, `/faviconkit/{size}/{domain}`, `/logodev/{size}/{domain}`, `/scraper/{size}/{domain}`, and the catalog routes `/selfhst/{size}/{service}`, `/dashboardicons/{size}/{service}`, `/lobehub/{size}/{service}`. Previously size was sometimes a path segment (`/g/{size}/`), sometimes a query (`?size=`), and sometimes absent.
+- **`/{domain}/json` — uniform endpoint shape** — every provider entry now exposes a consistent `{ proxy, source, sizes }` structure with `proxy` pointing at the default size and `sizes` listing all offered sizes using the new scheme. Provider-specific extras (`vemetric.formats`, `scraper.icons[]/sizes/maxIconSize/fallback/wwwFallback`, catalog `service/query/variants`, `logodev.configured`) are preserved.
+- **Web UI proxy/embed URLs** — the homepage now builds and displays the new canonical URLs (e.g. `/scraper/{domain}`, `/google/{size}/{domain}`, `/selfhst/{size}/{service}`).
+
+### Added
+
+- **Server-side resizing for sizeless providers** — `duckduckgo`, `yandex`, `faviconso`, `favicondev`, `logodev` (and the `selfhst`/`dashboardicons` catalogs) now accept the size path segment and **downscale** the upstream icon server-side (never upscale), so the uniform `/{provider}/{size}/{...}` scheme is meaningful for every provider.
+- **Backward-compatible aliases** — the original short routes (`/g/`, `/g2/`, `/d/`, `/y/`, `/f/`, `/v/`, `/p/`, `/k/`, `/l/`, `/s/`, `/sh/`, `/di/`, `/lb/`) keep working unchanged, including their legacy sizeless forms.
+- **Web UI — native size detection for Google & FaviconKit cards** — these providers don't actually have an icon at every offered size; they just return the largest one they have (e.g. github.com tops out at 32×32). The card now probes the proxy at its largest size to read the real native resolution and **hides size buttons that exceed it**, so only sizes that genuinely exist are shown (github → 32/16, apple → 64/32/16, microsoft → 128/64/32/16, notion → all). If the active size becomes unavailable, the card automatically switches to the largest available size.
+
+### Fixed
+
+- **Scraper no longer prefers catalog icons over its own** — `fetchScraper` now runs the direct HTML scrape first and returns the largest discovered icon (downscaled to `SCRAPER_MAX_ICON_SIZE` when set). The curated catalogs (selfhst, dashboardicons) and Google faviconV2 are used only as a true fallback when scraping finds nothing. Previously, when a domain mapped to a known service slug, the catalog icon was returned before the site was scraped at all.
+- **Blurry resized icons for small-source providers** (e.g. Yandex's fixed 16×16) — the resize providers no longer upscale: when the upstream icon is smaller than the requested size, the native bytes are served unchanged instead of a blurry enlarged version.
+- **Blurry Vemetric icons** — Vemetric always returns a small intrinsic SVG (~24-32px), which previously rendered tiny/soft in the UI. The SVG is now rasterized server-side to the requested size (crisp size×size PNG) so it fills the card like the other providers. Explicit `?format=png|jpg|webp` requests are still served unchanged.
+- **`SCRAPER_MAX_ICON_SIZE` now enforced at serve time** — `GET /scraper/{domain}` previously only capped the icon when it was first fetched and cached. A cache entry written before the cap was configured (e.g. a full 512×512 source like github.com's `app-icon-512`) kept being served at full resolution until its TTL expired, which the browser then squeezed into the display card and rendered soft. The proxy now re-applies the cap on every response (`capScraperProxyOutput`), so oversized cached icons are downscaled to `SCRAPER_MAX_ICON_SIZE` before sending — no cache refresh required. The cap is a no-op when the icon is already within the limit or when `SCRAPER_MAX_ICON_SIZE=0`.
+
 ## [2.2.0] — 2026-06-26
 
 ### Added

@@ -1533,15 +1533,10 @@ async function fetchScraperGoogleFallback(domain) {
 }
 
 async function fetchScraper(domain) {
-  // When fallback is enabled and the domain maps to a known service slug,
-  // prefer curated catalog icons (selfhst, dashboardicons) — they are
-  // typically higher resolution and visually consistent compared to whatever
-  // the website exposes via <link rel="icon">.
-  if (SCRAPER_FALLBACK) {
-    const catalogResult = await fetchScraperCatalogFallback(domain);
-    if (catalogResult) return catalogResult;
-  }
-
+  // Primary: the site's own icons via direct HTML scrape. probeScraperCandidates
+  // already returns the largest discovered icon, which capScraperProxyOutput then
+  // downscales to SCRAPER_MAX_ICON_SIZE when set. This is preferred over the
+  // curated catalogs so a domain's actual largest icon wins.
   const result = await fetchScraperForDomain(domain);
   if (result) return result;
 
@@ -1553,8 +1548,12 @@ async function fetchScraper(domain) {
     }
   }
 
-  // Last resort when scraping failed entirely: Google faviconV2.
+  // Fallbacks — only when direct scraping found nothing at all. When the domain
+  // maps to a known service slug, prefer curated catalog icons (selfhst,
+  // dashboardicons); Google faviconV2 is the last resort.
   if (SCRAPER_FALLBACK) {
+    const catalogResult = await fetchScraperCatalogFallback(domain);
+    if (catalogResult) return catalogResult;
     return fetchScraperGoogleFallback(domain);
   }
 
@@ -1654,6 +1653,7 @@ module.exports = {
   parseSizesAttr,
   expandSizedVariants,
   getScraperMaxIconSize,
+  capScraperProxyOutput,
   getScraperFallback,
   PROVIDERS,
   getSelfhstVariantAvailability,

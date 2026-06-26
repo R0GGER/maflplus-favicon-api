@@ -1739,7 +1739,7 @@
     const DOMAIN_FAVICON_PROVIDERS = [
       'scraper', 'google', 'ddg', 'yandex', 'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'logodev',
     ];
-    const SERVICE_PROXY_PREFIX = { selfhst: '/sh', dashboardicons: '/di', lobehub: '/lb' };
+    const SERVICE_PROXY_PREFIX = { selfhst: '/selfhst', dashboardicons: '/dashboardicons', lobehub: '/lobehub' };
     let providersConfig = { logoDev: false, logoDevToken: null, includeAppIcons: true };
 
     function escapeHtml(s) {
@@ -1931,12 +1931,7 @@
     }
 
     function serviceProxyPath(provider, slug, variant) {
-      if (provider === 'lobehub') {
-        const params = new URLSearchParams({ size: '128' });
-        if (variant !== 'color') params.set('variant', variant);
-        return `/lb/${slug}?${params.toString()}`;
-      }
-      const base = `${SERVICE_PROXY_PREFIX[provider]}/${slug}`;
+      const base = `${SERVICE_PROXY_PREFIX[provider]}/128/${slug}`;
       return variant === 'color' ? base : `${base}?variant=${variant}`;
     }
 
@@ -2199,22 +2194,20 @@
       updateResetButton();
 
       showCardsByType('domain');
-      setActiveSize('google-sizes', 128);
-      setActiveSize('faviconkit-sizes', 128);
 
       loadScraperFavicon(domain);
-      loadGoogle(domain, 128);
-      loadDavicon('ddg', `/d/${domain}`, `https://icons.duckduckgo.com/ip3/${domain}.ico`);
-      loadFavicon('yandex', `/y/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
-      loadFavicon('faviconso', `/f/${domain}`, `https://favicon.so/api/favicon?url=${domain}`);
-      loadFavicon('vemetric', `/v/${domain}`, `https://favicon.vemetric.com/${domain}`);
-      loadFavicon('favicondev', `/p/${domain}`, `https://favicon-3j1.pages.dev/favicon/${domain}`);
-      loadFaviconkit(domain, 128);
+      initSizedCard('google', domain);
+      loadDavicon('ddg', `/duckduckgo/64/${domain}`, `https://icons.duckduckgo.com/ip3/${domain}.ico`);
+      loadFavicon('yandex', `/yandex/64/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
+      loadFavicon('faviconso', `/faviconso/64/${domain}`, `https://favicon.so/api/favicon?url=${domain}`);
+      loadFavicon('vemetric', `/vemetric/128/${domain}`, `https://favicon.vemetric.com/${domain}`);
+      loadFavicon('favicondev', `/favicondev/64/${domain}`, `https://favicon-3j1.pages.dev/favicon/${domain}`);
+      initSizedCard('faviconkit', domain);
 
       if (providersConfig.logoDev) {
         // Show the proxy URL under the image instead of the upstream URL,
         // so the token never leaks and users get the URL they should actually use.
-        loadFavicon('logodev', `/l/${domain}`, `${location.origin}/l/${domain}`);
+        loadFavicon('logodev', `/logodev/64/${domain}`, `${location.origin}/logodev/64/${domain}`);
       }
 
       if (selfhstToggle.checked) {
@@ -2261,18 +2254,102 @@
     function loadGoogle(domain, size) {
       if (size === 256) {
         const src = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`;
-        loadFavicon('google', `/g2/256/${domain}`, src);
+        loadFavicon('google', `/googlev2/256/${domain}`, src);
       } else {
-        loadFavicon('google', `/g/${size}/${domain}`, `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`);
+        loadFavicon('google', `/google/${size}/${domain}`, `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`);
       }
     }
 
     function loadFaviconkit(domain, size) {
-      loadFavicon('faviconkit', `/k/${size}/${domain}`, `https://ico.faviconkit.net/favicon/${domain}?sz=${size}`);
+      loadFavicon('faviconkit', `/faviconkit/${size}/${domain}`, `https://ico.faviconkit.net/favicon/${domain}?sz=${size}`);
+    }
+
+    // Cards whose upstreams (Google, FaviconKit) don't actually have an icon at
+    // every offered size — they just return the largest available one. We probe
+    // the proxy at the largest size (which never upscales server-side), read the
+    // real native resolution, and hide size buttons that exceed it so users only
+    // see sizes that genuinely exist.
+    const NATIVE_SIZE_CARDS = {
+      google: {
+        group: 'google-sizes',
+        sizes: [256, 128, 64, 32, 16],
+        preferred: 128,
+        probePath: (d) => `/googlev2/256/${d}`,
+        setCurrent: (s) => { currentGoogleSize = s; },
+        load: (d, s) => loadGoogle(d, s),
+      },
+      faviconkit: {
+        group: 'faviconkit-sizes',
+        sizes: [256, 128, 64, 32, 16],
+        preferred: 128,
+        probePath: (d) => `/faviconkit/256/${d}`,
+        setCurrent: (s) => { currentFaviconkitSize = s; },
+        load: (d, s) => loadFaviconkit(d, s),
+      },
+    };
+
+    function resetSizeButtons(groupId) {
+      document.querySelectorAll(`#${groupId} .size-btn`).forEach((btn) => {
+        btn.style.display = '';
+      });
+    }
+
+    function applyVisibleSizes(groupId, visibleSizes) {
+      const allowed = new Set(visibleSizes);
+      document.querySelectorAll(`#${groupId} .size-btn`).forEach((btn) => {
+        btn.style.display = allowed.has(parseInt(btn.textContent, 10)) ? '' : 'none';
+      });
+    }
+
+    function getActiveSize(groupId) {
+      const btn = document.querySelector(`#${groupId} .size-btn.active`);
+      return btn ? parseInt(btn.textContent, 10) : null;
+    }
+
+    function initSizedCard(id, domain) {
+      const cfg = NATIVE_SIZE_CARDS[id];
+      if (!cfg) return;
+      resetSizeButtons(cfg.group);
+      cfg.setCurrent(cfg.preferred);
+      setActiveSize(cfg.group, cfg.preferred);
+      cfg.load(domain, cfg.preferred);
+      detectNativeMax(id, domain);
+    }
+
+    function detectNativeMax(id, domain) {
+      const cfg = NATIVE_SIZE_CARDS[id];
+      if (!cfg) return;
+      const probe = new Image();
+      probe.onload = () => {
+        if (currentMode !== 'domain' || currentDomain !== domain) return;
+        const native = Math.max(probe.naturalWidth || 0, probe.naturalHeight || 0);
+        if (native > 0) refineSizeButtons(id, domain, native);
+      };
+      // On failure leave the offered buttons untouched.
+      probe.onerror = () => {};
+      probe.src = `${cfg.probePath(domain)}?_=${Date.now()}`;
+    }
+
+    function refineSizeButtons(id, domain, native) {
+      const cfg = NATIVE_SIZE_CARDS[id];
+      if (!cfg) return;
+      let effective = cfg.sizes.filter((s) => s <= native);
+      if (!effective.length) effective = [Math.min(...cfg.sizes)];
+      applyVisibleSizes(cfg.group, effective);
+
+      const active = getActiveSize(cfg.group);
+      if (active != null && effective.includes(active)) return;
+
+      const target = effective.includes(cfg.preferred)
+        ? cfg.preferred
+        : Math.max(...effective);
+      cfg.setCurrent(target);
+      setActiveSize(cfg.group, target);
+      cfg.load(domain, target);
     }
 
     function selfhstProxyPath(slug, variant) {
-      const base = `/sh/${slug}`;
+      const base = `/selfhst/128/${slug}`;
       return variant === 'color' ? base : `${base}?variant=${variant}`;
     }
 
@@ -2391,7 +2468,7 @@
     }
 
     function dashboardIconsProxyPath(slug, variant) {
-      const base = `/di/${slug}`;
+      const base = `/dashboardicons/128/${slug}`;
       return variant === 'color' ? base : `${base}?variant=${variant}`;
     }
 
@@ -2498,9 +2575,8 @@
     }
 
     function lobehubProxyPath(slug, variant, size = currentLobehubSize) {
-      const params = new URLSearchParams({ size: String(size) });
-      if (variant !== 'color') params.set('variant', variant);
-      return `/lb/${slug}?${params.toString()}`;
+      const base = `/lobehub/${size}/${slug}`;
+      return variant === 'color' ? base : `${base}?variant=${variant}`;
     }
 
     function lobehubSourceUrl(slug, variant) {
@@ -2641,7 +2717,7 @@
     let scraperLoadToken = 0;
 
     function scraperEmbedUrl() {
-      return `${location.origin}/s/${currentDomain}`;
+      return `${location.origin}/${currentDomain}`;
     }
 
     function setActiveScraperButton(selection) {
@@ -2687,8 +2763,8 @@
     }
 
     function loadScraperFallback(domain, refresh) {
-      const proxyUrl = refresh ? `/s/${domain}?refresh=1` : `/s/${domain}`;
-      loadFavicon('scraper', proxyUrl, `${location.origin}/s/${domain}`);
+      const proxyUrl = refresh ? `/scraper/${domain}?refresh=1` : `/scraper/${domain}`;
+      loadFavicon('scraper', proxyUrl, `${location.origin}/scraper/${domain}`);
     }
 
     function loadScraperFavicon(domain, refresh) {
@@ -2853,7 +2929,7 @@
         '<iconify-icon icon="f7:hare-fill" aria-hidden="true"></iconify-icon>' +
         '<span>Fast proxy URL</span>' +
         '</span>' +
-        `<span class="proxy-tip-body">Uses the largest available icon, downscaled to ${escapeHtml(sizeLabel)} for faster page loads and smaller downloads. Embed with <code>/s/{domain}</code>.</span>` +
+        `<span class="proxy-tip-body">Uses the largest available icon, downscaled to ${escapeHtml(sizeLabel)} for faster page loads and smaller downloads. Embed with <code>/{domain}</code>.</span>` +
         `<span class="proxy-tip-url" title="${escapeHtml(embedUrl)}">${escapeHtml(embedUrl)}</span>`;
       btn.appendChild(tip);
     }
@@ -2891,7 +2967,7 @@
             'size-btn' +
             (currentScraperSelection === `proxySize-${size}` ? ' active' : '');
           btn.textContent = String(size);
-          btn.title = `${location.origin}/s/${currentDomain}?size=${size}  \u2022  ${size}\u00d7${size}`;
+          btn.title = `${location.origin}/scraper/${size}/${currentDomain}  \u2022  ${size}\u00d7${size}`;
           btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2914,7 +2990,7 @@
         const h = icon.height || w;
         btn.textContent = w === h ? String(w) : `${w}\u00d7${h}`;
         const titleParts = [
-          icon.proxy || `${location.origin}/s/${currentDomain}?size=${w || 128}`,
+          icon.proxy || `${location.origin}/scraper/${w || 128}/${currentDomain}`,
           w && h ? `${w}\u00d7${h}` : null,
           icon.format ? icon.format.toUpperCase() : null,
           formatBytes(icon.bytes) || null,
@@ -2949,7 +3025,7 @@
       if (!currentDomain || scraperMaxIconSize <= 0) return;
       const token = ++scraperLoadToken;
       const embedUrl = scraperEmbedUrl();
-      const proxyUrl = `/s/${currentDomain}`;
+      const proxyUrl = `/scraper/${currentDomain}`;
 
       const img = document.getElementById('scraper-img');
       const spinner = document.getElementById('scraper-spinner');
@@ -2999,8 +3075,8 @@
 
       const token = ++scraperLoadToken;
       const size = icon.width || 128;
-      const proxyUrl = `/s/${currentDomain}?size=${size}`;
-      const displayProxyUrl = icon.proxy || `${location.origin}/s/${currentDomain}?size=${size}`;
+      const proxyUrl = `/scraper/${size}/${currentDomain}`;
+      const displayProxyUrl = icon.proxy || `${location.origin}/scraper/${size}/${currentDomain}`;
 
       const img = document.getElementById('scraper-img');
       const spinner = document.getElementById('scraper-spinner');
@@ -3033,7 +3109,7 @@
           copyLabel: 'Copy proxy URL',
         });
       };
-      imgEl.src = `${proxyUrl}&_=${Date.now()}`;
+      imgEl.src = `${proxyUrl}?_=${Date.now()}`;
     }
 
     function switchScraperProxySize(size) {
@@ -3046,8 +3122,8 @@
     function loadScraperProxySize(size) {
       if (!currentDomain) return;
       const token = ++scraperLoadToken;
-      const embedUrl = `${location.origin}/s/${currentDomain}?size=${size}`;
-      const proxyUrl = `/s/${currentDomain}?size=${size}`;
+      const embedUrl = `${location.origin}/scraper/${size}/${currentDomain}`;
+      const proxyUrl = `/scraper/${size}/${currentDomain}`;
 
       const img = document.getElementById('scraper-img');
       const spinner = document.getElementById('scraper-spinner');
@@ -3080,7 +3156,7 @@
           copyLabel: 'Copy proxy URL',
         });
       };
-      imgEl.src = `${proxyUrl}&_=${Date.now()}`;
+      imgEl.src = `${proxyUrl}?_=${Date.now()}`;
     }
 
     function loadFavicon(id, proxyUrl, sourceUrl) {
