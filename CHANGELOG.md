@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] — 2026-06-26
+
+### Added
+
+- **Google v2 — 180px size** — the `faviconV2` upstream also serves a 180px raster (the common `apple-touch-icon` size) that was previously usable upstream but not exposed. `/googlev2/{size}/{domain}` (alias `/g2/`) now accepts `180` alongside `16, 32, 64, 128, 256`, the `/{domain}/json` listing advertises `/googlev2/180/{domain}`, and the Web UI's **Google** card gains a `180` size button (routed through faviconV2, like 256). The Vemetric handler — which previously shared Google v2's valid-size set but does not serve 180 — now uses its own `VALID_VEMETRIC_SIZES` set (`16, 32, 64, 128, 256`).
+
+## [2.3.3] — 2026-06-26
+
+### Fixed
+
+- **Catalog logo served instead of a site's own high-res icon** (e.g. the sizeless `/scraper/github.com` returned the selfh.st **github** catalog logo even though github.com exposes its own 512×512 `app-icon`, so the Web UI's default proxy button — `/scraper/{domain}` when `SCRAPER_MAX_ICON_SIZE` is set — showed the catalog icon rather than GitHub's own favicon downscaled) — `fetchScraper` ran `fetchScraperCatalogFallback` **before** the direct HTML scrape whenever the domain mapped to a known service slug, overriding a perfectly good on-site icon. The direct scrape now runs **first**, and the curated catalogs (selfh.st, dashboardicons) are only preferred when the site's own best icon is below `MIN_SOURCE_SIZE` (128px) — preserving the catalog upgrade for low-quality cases like `facebook.com` (60×60 favicon) while keeping the real icon for sites that publish a large one. `probeScraperCandidates` now exposes the chosen source's `sourceWidth` so `fetchScraper` can make this decision; SVG sources (effective ≥512px) always count as large enough. The sized routes (`/scraper/{size}/{domain}`) were already unaffected because they resolve through `serveSizedScraperIcon` against the discovered `icons` list. After deploying, refresh cached entries (`?refresh=1`) so previously cached catalog icons are replaced; `X-Favicon-Source` returns to `scraper` instead of `scraper-fallback:selfhst`.
+
 ## [2.3.2] — 2026-06-26
 
 ### Fixed

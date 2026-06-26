@@ -204,7 +204,10 @@ app.use(
 app.use(apiRoutes);
 
 const VALID_GOOGLE_SIZES = new Set([16, 32, 64, 128]);
-const VALID_GOOGLEV2_SIZES = new Set([16, 32, 64, 128, 256]);
+// faviconV2 also serves a 180px raster (the common apple-touch-icon size) in
+// addition to the standard power-of-two sizes.
+const VALID_GOOGLEV2_SIZES = new Set([16, 32, 64, 128, 180, 256]);
+const VALID_VEMETRIC_SIZES = new Set([16, 32, 64, 128, 256]);
 const VALID_FAVICONKIT_SIZES = new Set([16, 32, 64, 128, 256]);
 const VALID_SCRAPER_SIZES = new Set([16, 32, 64, 128, 256, 512]);
 const SCRAPER_SIZES_ARRAY = [16, 32, 64, 128, 256, 512];
@@ -224,7 +227,7 @@ const RESIZE_SIZES = new Set([16, 32, 64, 128, 256]);
 const RESIZE_SIZES_ARRAY = [16, 32, 64, 128, 256];
 const CATALOG_SIZES_ARRAY = [16, 32, 64, 128, 256];
 const GOOGLE_SIZES_ARRAY = [16, 32, 64, 128];
-const GOOGLEV2_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const GOOGLEV2_SIZES_ARRAY = [16, 32, 64, 128, 180, 256];
 const FAVICONKIT_SIZES_ARRAY = [16, 32, 64, 128, 256];
 const VEMETRIC_SIZES_ARRAY = [16, 32, 64, 128, 256];
 const LOBEHUB_SIZES_ARRAY = [64, 128, 256];
@@ -487,7 +490,7 @@ app.get(['/google/:size/:domain', '/g/:size/:domain'], async (req, res) => {
 app.get(['/googlev2/:size/:domain', '/g2/:size/:domain'], async (req, res) => {
   const size = parseInt(req.params.size, 10);
   if (!VALID_GOOGLEV2_SIZES.has(size)) {
-    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, 180, or 256.' });
   }
 
   const domain = extractDomain(req.params.domain);
@@ -530,7 +533,7 @@ app.get('/f/:domain', makeNativeProviderHandler('faviconso', 'Favicon.so', fetch
 // Legacy /v/:domain (with optional ?size= & ?format=) kept as an alias.
 async function vemetricSizedHandler(req, res) {
   const size = parseInt(req.params.size, 10);
-  if (!VALID_GOOGLEV2_SIZES.has(size)) {
+  if (!VALID_VEMETRIC_SIZES.has(size)) {
     return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
   }
 

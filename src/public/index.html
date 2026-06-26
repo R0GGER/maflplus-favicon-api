@@ -1339,6 +1339,7 @@
         </div>
         <div class="size-buttons" id="google-sizes">
           <button class="size-btn" onclick="switchGoogleSize(256)">256</button>
+          <button class="size-btn" onclick="switchGoogleSize(180)">180</button>
           <button class="size-btn active" onclick="switchGoogleSize(128)">128</button>
           <button class="size-btn" onclick="switchGoogleSize(64)">64</button>
           <button class="size-btn" onclick="switchGoogleSize(32)">32</button>
@@ -1420,9 +1421,9 @@
         <div class="meta" id="faviconkit-meta"></div>
       </div>
 
-      <!-- favicon.run -->
+      <!-- Favicon.run -->
       <div class="card" data-card-type="domain">
-        <h3>favicon.run</h3>
+        <h3>Favicon.run</h3>
         <div class="favicon-display" id="faviconrun-display" onclick="copyImage(this)">
           <div class="spinner" id="faviconrun-spinner" style="display:none"></div>
           <img id="faviconrun-img" style="display:none" alt="favicon.run favicon">
@@ -2274,9 +2275,11 @@
     }
 
     function loadGoogle(domain, size) {
-      if (size === 256) {
-        const src = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`;
-        loadFavicon('google', `/googlev2/256/${domain}`, src);
+      // faviconV2 (v2) is the only Google endpoint that serves 180px and 256px;
+      // the smaller sizes come from the classic s2/favicons (v1) service.
+      if (size === 256 || size === 180) {
+        const src = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=${size}`;
+        loadFavicon('google', `/googlev2/${size}/${domain}`, src);
       } else {
         loadFavicon('google', `/google/${size}/${domain}`, `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`);
       }
@@ -2298,7 +2301,7 @@
     const NATIVE_SIZE_CARDS = {
       google: {
         group: 'google-sizes',
-        sizes: [256, 128, 64, 32, 16],
+        sizes: [256, 180, 128, 64, 32, 16],
         preferred: 128,
         probePath: (d) => `/googlev2/256/${d}`,
         setCurrent: (s) => { currentGoogleSize = s; },
