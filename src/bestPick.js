@@ -9,18 +9,20 @@ const {
   fetchFaviconDev,
   fetchFaviconkit,
   fetchLogoDev,
+  fetchFaviconRun,
   fetchSelfhst,
   fetchDashboardIcons,
   fetchLobehub,
   fetchScraper,
 } = require('./providers');
 const cache = require('./cache');
+const { isBlankFavicon } = require('./imageNormalize');
 const { serviceSlugFromDomain } = require('./serviceSlugFromDomain');
 
 const VALID_DEFAULT_PROVIDERS = new Set([
   'scraper', 'google', 'googlev2', 'duckduckgo', 'yandex',
-  'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'logodev',
-  'selfhst', 'dashboardicons', 'lobehub',
+  'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'faviconrun',
+  'logodev', 'selfhst', 'dashboardicons', 'lobehub',
 ]);
 
 const DEFAULT_PROVIDER = (() => {
@@ -89,6 +91,7 @@ function buildFallbackFetchers(domain) {
     duckduckgo: () => fetchWithCache('duckduckgo', domain, null, () => fetchDuckDuckGo(domain)),
     google:     () => fetchWithCache('google', domain, 32, () => fetchGoogle(domain, 32)),
     faviconkit: () => fetchWithCache('faviconkit', domain, 128, () => fetchFaviconkit(domain, 128)),
+    faviconrun: () => fetchWithCache('faviconrun', domain, 128, () => fetchFaviconRun(domain, 128)),
     faviconso:  () => fetchWithCache('faviconso', domain, null, () => fetchFaviconSo(domain)),
     vemetric:   () => fetchWithCache('vemetric', domain, null, () => fetchVemetric(domain)),
     favicondev: () => fetchWithCache('favicondev', domain, null, () => fetchFaviconDev(domain)),
@@ -111,7 +114,7 @@ function buildFallbackFetchers(domain) {
   const defaultOrder = [
     'scraper', 'googlev2', 'duckduckgo',
     ...(process.env.LOGODEV_TOKEN ? ['logodev'] : []),
-    'google', 'faviconkit', 'faviconso', 'vemetric', 'favicondev', 'yandex',
+    'google', 'faviconkit', 'faviconrun', 'faviconso', 'vemetric', 'favicondev', 'yandex',
   ];
 
   if (DEFAULT_PROVIDER && all[DEFAULT_PROVIDER]) {
@@ -213,9 +216,13 @@ async function pickBestService(service) {
 
 async function fetchWithCache(provider, domain, size, fetcher) {
   const cached = await cache.get(provider, domain, size);
-  if (cached) return cached;
+  if (cached) {
+    if (!(await isBlankFavicon(cached.buffer, cached))) return cached;
+    await cache.del(provider, domain, size);
+  }
 
   const result = await fetcher();
+  if (result && (await isBlankFavicon(result.buffer, result))) return null;
   if (result) {
     await cache.set(provider, domain, size, result);
   }

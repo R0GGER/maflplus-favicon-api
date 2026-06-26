@@ -30,7 +30,7 @@ All provider routes follow a single uniform scheme: **`/{provider}/{size}/{domai
 | [Yandex](https://favicon.yandex.net/) | `/yandex/{size}/{domain}` | `/y/` | Resized server-side |
 | [Favicon.so](https://favicon.so/) | `/faviconso/{size}/{domain}` | `/f/` | Resized server-side |
 | [Vemetric](https://favicon.vemetric.com/) | `/vemetric/{size}/{domain}` | `/v/` | `?format=png\|jpg\|webp` |
-| [Favicon-3j1](https://favicon-3j1.pages.dev/) | `/favicondev/{size}/{domain}` | `/p/` | Resized server-side |
+| [Favicon Extractor](https://www.faviconextractor.com/) | `/favicondev/{size}/{domain}` | `/p/` | Resized server-side |
 | [Faviconkit](https://faviconkit.net/) | `/faviconkit/{size}/{domain}` | `/k/` | Sizes 16, 32, 64, 128, 256 |
 | [logo.dev](https://www.logo.dev/) | `/logodev/{size}/{domain}` | `/l/` | Requires `LOGODEV_TOKEN`; resized server-side |
 

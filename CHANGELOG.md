@@ -5,7 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.3.1] — 2026-06-26
+
+### Added
+
+- **favicon.run provider** — new domain favicon provider backed by [favicon.run](https://favicon.run). Upstream supports native sizes (16, 32, 64, 128, 256) via `?sz=` parameter. Canonical route: `/faviconrun/{size}/{domain}`, short alias: `/fr/{size}/{domain}`. Included in `/{domain}/json` discovery, the best-pick race (`GET /:domain`), `DEFAULT_PROVIDER` options, and the Web UI with size-button strip.
+
+### Fixed
+
+- **Empty Favicon.so & Faviconextractor.com cards** — these providers often return SVG favicons that use CSS custom properties (`var(--primary-fill)`, `var(--secondary-fill)`) with `prefers-color-scheme` rules. Sharp cannot resolve those variables, so rasterization produced a fully transparent PNG and the Web UI showed a blank frame while metadata still listed a size/URL. SVGs are now preprocessed with light-mode colour defaults before rasterization, and the resize proxy handlers use `renderIconToSize` (proper SVG/ICO handling) instead of raw `downscaleEntryToSize`.
+- **Yandex empty/transparent placeholder icons** — Yandex can return a 16×16 fully transparent PNG (not just the known 1×1 case). `fetchYandex` and `fetchWithCache` now reject any raster icon with no visible pixels (`isBlankFavicon`), evict stale blank cache entries, and return 502 so the Web UI hides the card.
+- **ICO sources on resize provider routes** — when an upstream provider returns ICO bytes (e.g. Favicon.so content negotiation), resize handlers now convert to PNG via `toDisplayPng` before downscaling so Sharp never receives an undecodable buffer.
+
+### Changed
+
+- **Upstream favicon fetch headers** — provider fetches now use the same browser-like `User-Agent` and raster-preferring `Accept` header as the HTML scraper instead of `FaviconProxy/1.0`, reducing cases where CDNs return SVG-only responses to bot-like clients.
+
+### Changed
+
+- **favicondev upstream — Favicon Extractor** — the `/favicondev/` provider (alias `/p/`) now proxies `https://www.faviconextractor.com/favicon/{domain}` instead of `https://favicon-3j1.pages.dev/favicon/{domain}`. README, `.env.example`, and the Web UI direct-link were updated accordingly.
 
 ## [2.3.0] — 2026-06-26
 

@@ -41,13 +41,27 @@ function looksLikeIco(buffer) {
   );
 }
 
+// Sharp/librsvg cannot resolve CSS custom properties (e.g. favicon.so SVGs using
+// var(--primary-fill) with prefers-color-scheme). Substitute light-mode defaults.
+function preprocessSvgForRaster(buffer) {
+  if (!buffer || buffer.length === 0) return buffer;
+  const svg = buffer.toString('utf8');
+  if (!svg.includes('var(')) return buffer;
+  return Buffer.from(
+    svg
+      .replace(/var\(--primary-fill\)/gi, '#ffffff')
+      .replace(/var\(--secondary-fill\)/gi, '#000000'),
+    'utf8'
+  );
+}
+
 async function rasterizeSvg(buffer) {
   return rasterizeSvgToSize(buffer, TARGET_SIZE);
 }
 
 async function rasterizeSvgToSize(buffer, size = TARGET_SIZE) {
   const density = Math.max(72, size * 4);
-  return sharp(buffer, { density })
+  return sharp(preprocessSvgForRaster(buffer), { density })
     .resize(size, size, resizeOptions())
     .png()
     .toBuffer();
@@ -245,6 +259,23 @@ async function resizeIcon(buffer, size) {
     .toBuffer();
 }
 
+// True when a raster favicon has no visible pixels (e.g. Yandex's empty 16×16 PNG).
+async function isBlankFavicon(buffer, { contentType = '', url = '' } = {}) {
+  if (!buffer || buffer.length === 0) return true;
+
+  const hint = `${contentType} ${url}`.toLowerCase();
+  if (looksLikeSvg(buffer) || hint.includes('svg')) return false;
+
+  try {
+    const meta = await sharp(buffer).metadata();
+    if ((meta.width || 0) <= 1 && (meta.height || 0) <= 1) return true;
+    const stats = await sharp(buffer).stats();
+    return (stats.channels[3]?.max ?? 255) === 0;
+  } catch {
+    return false;
+  }
+}
+
 // Keep legacy export name for compatibility
 const toPng256 = toPng;
 
@@ -254,6 +285,7 @@ module.exports = {
   toDisplayPng,
   readImageDimensions,
   resizeIcon,
+  isBlankFavicon,
   looksLikeIco,
   looksLikeSvg,
   rasterizeSvgToSize,

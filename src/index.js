@@ -17,6 +17,7 @@ const {
   fetchFaviconDev,
   fetchFaviconkit,
   fetchLogoDev,
+  fetchFaviconRun,
   fetchSelfhst,
   fetchDashboardIcons,
   fetchLobehub,
@@ -40,7 +41,14 @@ const {
   getLobehubVariantAvailability,
 } = require('./serviceAliases');
 const { serviceSlugFromDomain, listDomainIconTags } = require('./serviceSlugFromDomain');
-const { toDisplayPng, resizeIcon, rasterizeSvgToSize, readImageDimensions, looksLikeSvg } = require('./imageNormalize');
+const {
+  toDisplayPng,
+  resizeIcon,
+  rasterizeSvgToSize,
+  readImageDimensions,
+  looksLikeSvg,
+  looksLikeIco,
+} = require('./imageNormalize');
 const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
@@ -204,6 +212,8 @@ const VALID_VEMETRIC_FORMATS = new Set(['png', 'jpg', 'webp']);
 const VALID_SELFHST_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_DASHBOARDICONS_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_LOBEHUB_VARIANTS = new Set(['color', 'light', 'dark']);
+const VALID_FAVICONRUN_SIZES = new Set([16, 32, 64, 128, 256]);
+const FAVICONRUN_SIZES_ARRAY = [16, 32, 64, 128, 256];
 const VALID_LOBEHUB_SIZES = new Set([64, 128, 256]);
 const DEFAULT_LOBEHUB_SIZE = 128;
 
@@ -363,14 +373,28 @@ async function buildServiceCatalogEndpoints(host, query, selfhstServiceSlug, das
 // unchanged. Returns the (possibly resized) entry.
 async function downscaleEntryToSize(entry, size) {
   try {
-    const dims = await readImageDimensions(entry.buffer, {
-      contentType: entry.contentType,
+    let buffer = entry.buffer;
+    let contentType = entry.contentType;
+    const hint = `${contentType || ''} ${entry.url || ''}`.toLowerCase();
+    const isIco = looksLikeIco(buffer) || hint.includes('ico');
+
+    if (isIco) {
+      const displayed = await toDisplayPng(buffer, { contentType, url: entry.url });
+      buffer = displayed.buffer;
+      contentType = displayed.contentType;
+    }
+
+    const dims = await readImageDimensions(buffer, {
+      contentType,
       url: entry.url,
     });
     const side = dims ? Math.min(dims.width || 0, dims.height || dims.width || 0) : 0;
     if (side > size) {
-      const buffer = await resizeIcon(entry.buffer, size);
-      return { ...entry, buffer, contentType: 'image/png' };
+      const resized = await resizeIcon(buffer, size);
+      return { ...entry, buffer: resized, contentType: 'image/png' };
+    }
+    if (isIco) {
+      return { ...entry, buffer, contentType };
     }
   } catch {
     /* fall through and serve native bytes */
@@ -413,7 +437,7 @@ function makeResizeProviderHandler(providerKey, label, fetchFn) {
     try {
       const entry = await fetchWithCache(providerKey, domain, null, () => fetchFn(domain));
       if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-      sendFavicon(res, await downscaleEntryToSize(entry, size));
+      sendFavicon(res, await renderIconToSize(entry, size));
     } catch (err) {
       console.error(`${label} proxy error:`, err.message);
       res.status(500).json({ error: 'Internal error.' });
@@ -577,6 +601,26 @@ app.get(['/faviconkit/:size/:domain', '/k/:size/:domain'], async (req, res) => {
     sendFavicon(res, entry);
   } catch (err) {
     console.error('Faviconkit proxy error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
+});
+
+// favicon.run proxy: /faviconrun/:size/:domain (alias: /fr/:size/:domain)
+app.get(['/faviconrun/:size/:domain', '/fr/:size/:domain'], async (req, res) => {
+  const size = parseInt(req.params.size, 10);
+  if (!VALID_FAVICONRUN_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  }
+
+  const domain = extractDomain(req.params.domain);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
+
+  try {
+    const entry = await fetchWithCache('faviconrun', domain, size, () => fetchFaviconRun(domain, size));
+    if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('favicon.run proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
   }
 });
@@ -1184,6 +1228,12 @@ app.get('/:domain/json', async (req, res) => {
         FAVICONKIT_SIZES_ARRAY,
         DEFAULT_NATIVE_SIZE,
         (size) => PROVIDERS.faviconkit(domain, size)
+      ),
+      faviconrun: uniformProvider(
+        'faviconrun',
+        FAVICONRUN_SIZES_ARRAY,
+        DEFAULT_NATIVE_SIZE,
+        (size) => PROVIDERS.faviconRun(domain, size)
       ),
       logodev,
       scraper: {

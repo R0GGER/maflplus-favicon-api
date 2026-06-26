@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>FaviconAPI &ndash; Get high-resolution favicons for any domain</title>
-  <meta name="description" content="Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, logo.dev) plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.">
+  <meta name="description" content="Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, favicon.run, logo.dev) plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.">
   <meta name="keywords" content="favicon, favicon api, favicon fetcher, favicon proxy, favicon downloader, get favicon, high resolution favicon, selfhst icons, homarr dashboard icons, MAFL, MAFL+, dashboard icons, homepage icons, self-hosted">
   <meta name="author" content="R0GGER">
   <meta name="robots" content="index, follow">
@@ -59,7 +59,7 @@
     "@type": "WebApplication",
     "name": "FaviconAPI",
     "alternateName": "Favicon API",
-    "description": "Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, logo.dev), plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.",
+    "description": "Free favicon API and web UI that fetches the highest-resolution favicon for any domain from 10+ providers (HTML scraper, Google, DuckDuckGo, Yandex, Favicon.so, Vemetric, Favicon Downloader, FaviconKit, favicon.run, logo.dev), plus selfh.st and homarr-labs/dashboard-icons service icon lookups by name.",
     "url": "__BASE_URL__/",
     "image": "__BASE_URL__/logo.png",
     "applicationCategory": "DeveloperApplication",
@@ -1393,7 +1393,7 @@
 
       <!-- Favicon-3j1 -->
       <div class="card" data-card-type="domain">
-        <h3>Favicon Downloader</h3>
+        <h3>Faviconextractor.com</h3>
         <div class="favicon-display" id="favicondev-display" onclick="copyImage(this)">
           <div class="spinner" id="favicondev-spinner" style="display:none"></div>
           <img id="favicondev-img" style="display:none" alt="Favicon-3j1 favicon">
@@ -1404,7 +1404,7 @@
 
       <!-- Faviconkit -->
       <div class="card" data-card-type="domain">
-        <h3>FaviconKit</h3>
+        <h3>Faviconkit.net</h3>
         <div class="favicon-display" id="faviconkit-display" onclick="copyImage(this)">
           <div class="spinner" id="faviconkit-spinner" style="display:none"></div>
           <img id="faviconkit-img" style="display:none" alt="Faviconkit favicon">
@@ -1418,6 +1418,24 @@
           <button class="size-btn" onclick="switchFaviconkitSize(16)">16</button>
         </div>
         <div class="meta" id="faviconkit-meta"></div>
+      </div>
+
+      <!-- favicon.run -->
+      <div class="card" data-card-type="domain">
+        <h3>favicon.run</h3>
+        <div class="favicon-display" id="faviconrun-display" onclick="copyImage(this)">
+          <div class="spinner" id="faviconrun-spinner" style="display:none"></div>
+          <img id="faviconrun-img" style="display:none" alt="favicon.run favicon">
+          <span class="copied-toast">URL copied!</span>
+        </div>
+        <div class="size-buttons" id="faviconrun-sizes">
+          <button class="size-btn" onclick="switchFaviconrunSize(256)">256</button>
+          <button class="size-btn active" onclick="switchFaviconrunSize(128)">128</button>
+          <button class="size-btn" onclick="switchFaviconrunSize(64)">64</button>
+          <button class="size-btn" onclick="switchFaviconrunSize(32)">32</button>
+          <button class="size-btn" onclick="switchFaviconrunSize(16)">16</button>
+        </div>
+        <div class="meta" id="faviconrun-meta"></div>
       </div>
 
       <!-- logo.dev -->
@@ -1725,6 +1743,7 @@
     let currentMode = '';
     let currentGoogleSize = 128;
     let currentFaviconkitSize = 128;
+    let currentFaviconrunSize = 128;
     let currentSelfhstSlug = '';
     let currentSelfhstVariant = 'color';
     let selfhstProbeSeq = 0;
@@ -1737,7 +1756,7 @@
     let currentLobehubSize = 128;
     const SERVICE_ICON_PROVIDERS = ['selfhst', 'dashboardicons', 'lobehub'];
     const DOMAIN_FAVICON_PROVIDERS = [
-      'scraper', 'google', 'ddg', 'yandex', 'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'logodev',
+      'scraper', 'google', 'ddg', 'yandex', 'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'faviconrun', 'logodev',
     ];
     const SERVICE_PROXY_PREFIX = { selfhst: '/selfhst', dashboardicons: '/dashboardicons', lobehub: '/lobehub' };
     let providersConfig = { logoDev: false, logoDevToken: null, includeAppIcons: true };
@@ -1799,6 +1818,7 @@
       currentService = '';
       currentGoogleSize = 128;
       currentFaviconkitSize = 128;
+      currentFaviconrunSize = 128;
       currentSelfhstSlug = '';
       currentSelfhstVariant = 'color';
       currentDashboardIconsSlug = '';
@@ -1839,6 +1859,7 @@
       updateServiceIconsDivider();
       setActiveSize('google-sizes', 128);
       setActiveSize('faviconkit-sizes', 128);
+      setActiveSize('faviconrun-sizes', 128);
       resetSelfhstVariantButtons();
       resetDashboardIconsVariantButtons();
       resetLobehubVariantButtons();
@@ -2201,8 +2222,9 @@
       loadFavicon('yandex', `/yandex/64/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
       loadFavicon('faviconso', `/faviconso/64/${domain}`, `https://favicon.so/api/favicon?url=${domain}`);
       loadFavicon('vemetric', `/vemetric/128/${domain}`, `https://favicon.vemetric.com/${domain}`);
-      loadFavicon('favicondev', `/favicondev/64/${domain}`, `https://favicon-3j1.pages.dev/favicon/${domain}`);
+      loadFavicon('favicondev', `/favicondev/64/${domain}`, `https://www.faviconextractor.com/favicon/${domain}`);
       initSizedCard('faviconkit', domain);
+      initSizedCard('faviconrun', domain);
 
       if (providersConfig.logoDev) {
         // Show the proxy URL under the image instead of the upstream URL,
@@ -2264,6 +2286,10 @@
       loadFavicon('faviconkit', `/faviconkit/${size}/${domain}`, `https://ico.faviconkit.net/favicon/${domain}?sz=${size}`);
     }
 
+    function loadFaviconrun(domain, size) {
+      loadFavicon('faviconrun', `/faviconrun/${size}/${domain}`, `https://favicon.run/favicon?domain=${domain}&sz=${size}`);
+    }
+
     // Cards whose upstreams (Google, FaviconKit) don't actually have an icon at
     // every offered size — they just return the largest available one. We probe
     // the proxy at the largest size (which never upscales server-side), read the
@@ -2285,6 +2311,14 @@
         probePath: (d) => `/faviconkit/256/${d}`,
         setCurrent: (s) => { currentFaviconkitSize = s; },
         load: (d, s) => loadFaviconkit(d, s),
+      },
+      faviconrun: {
+        group: 'faviconrun-sizes',
+        sizes: [256, 128, 64, 32, 16],
+        preferred: 128,
+        probePath: (d) => `/faviconrun/256/${d}`,
+        setCurrent: (s) => { currentFaviconrunSize = s; },
+        load: (d, s) => loadFaviconrun(d, s),
       },
     };
 
@@ -3206,6 +3240,13 @@
       currentFaviconkitSize = size;
       setActiveSize('faviconkit-sizes', size);
       loadFaviconkit(currentDomain, size);
+    }
+
+    function switchFaviconrunSize(size) {
+      if (!currentDomain) return;
+      currentFaviconrunSize = size;
+      setActiveSize('faviconrun-sizes', size);
+      loadFaviconrun(currentDomain, size);
     }
 
     function setActiveSize(groupId, size) {

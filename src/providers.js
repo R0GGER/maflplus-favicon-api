@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const sharp = require('sharp');
-const { rasterizeSvgToSize, readImageDimensions, toDisplayPng, looksLikeSvg } = require('./imageNormalize');
+const { rasterizeSvgToSize, readImageDimensions, toDisplayPng, looksLikeSvg, isBlankFavicon } = require('./imageNormalize');
 const { LRUCache } = require('lru-cache');
 const { upstreamFetch, ipv4Dispatcher, ipv4Http1Dispatcher } = require('./upstreamFetch');
 const scraperDiskCache = require('./scraperDiskCache');
@@ -460,7 +460,7 @@ const PROVIDERS = {
     return `https://favicon.vemetric.com/${encodeURIComponent(domain)}${qs ? '?' + qs : ''}`;
   },
   faviconDev: (domain) =>
-    `https://favicon-3j1.pages.dev/favicon/${encodeURIComponent(domain)}`,
+    `https://www.faviconextractor.com/favicon/${encodeURIComponent(domain)}`,
   faviconkit: (domain, size = 128) =>
     `https://ico.faviconkit.net/favicon/${encodeURIComponent(domain)}?sz=${size}`,
   logoDev: (domain, token) =>
@@ -479,6 +479,13 @@ const PROVIDERS = {
     if (variant === 'light' || variant === 'dark') return `${base}.svg`;
     return `${base}.svg`;
   },
+  faviconRun: (domain, size = 128) =>
+    `https://favicon.run/favicon?domain=${encodeURIComponent(domain)}&sz=${size}`,
+};
+
+const FAVICON_FETCH_HEADERS = {
+  'User-Agent': SCRAPER_USER_AGENT,
+  Accept: 'image/avif,image/webp,image/apng,image/png,image/*;q=0.8',
 };
 
 async function fetchFavicon(url, requestHeaders) {
@@ -488,7 +495,7 @@ async function fetchFavicon(url, requestHeaders) {
   try {
     const res = await upstreamFetch(url, {
       signal: controller.signal,
-      headers: requestHeaders || { 'User-Agent': 'FaviconProxy/1.0' },
+      headers: requestHeaders || FAVICON_FETCH_HEADERS,
     });
 
     if (!res.ok) return null;
@@ -528,14 +535,7 @@ async function fetchYandex(domain) {
   const url = PROVIDERS.yandex(domain);
   const result = await fetchFavicon(url);
   if (!result) return null;
-
-  try {
-    const meta = await sharp(result.buffer).metadata();
-    if ((meta.width || 0) <= 1 && (meta.height || 0) <= 1) return null;
-  } catch {
-    /* keep result if metadata probe fails */
-  }
-
+  if (await isBlankFavicon(result.buffer, result)) return null;
   return { ...result, provider: 'yandex' };
 }
 
@@ -569,6 +569,12 @@ async function fetchLogoDev(domain) {
   const url = PROVIDERS.logoDev(domain, token);
   const result = await fetchFavicon(url);
   return result ? { ...result, provider: 'logodev' } : null;
+}
+
+async function fetchFaviconRun(domain, size = 128) {
+  const url = PROVIDERS.faviconRun(domain, size);
+  const result = await fetchFavicon(url);
+  return result ? { ...result, provider: 'faviconrun' } : null;
 }
 
 const {
@@ -1533,10 +1539,14 @@ async function fetchScraperGoogleFallback(domain) {
 }
 
 async function fetchScraper(domain) {
-  // Primary: the site's own icons via direct HTML scrape. probeScraperCandidates
-  // already returns the largest discovered icon, which capScraperProxyOutput then
-  // downscales to SCRAPER_MAX_ICON_SIZE when set. This is preferred over the
-  // curated catalogs so a domain's actual largest icon wins.
+  // When SCRAPER_FALLBACK is enabled and the domain maps to a known service
+  // slug, prefer curated catalog icons (selfhst, dashboardicons) over direct
+  // HTML scraping — they are typically higher resolution and visually consistent.
+  if (SCRAPER_FALLBACK) {
+    const catalogResult = await fetchScraperCatalogFallback(domain);
+    if (catalogResult) return catalogResult;
+  }
+
   const result = await fetchScraperForDomain(domain);
   if (result) return result;
 
@@ -1548,12 +1558,9 @@ async function fetchScraper(domain) {
     }
   }
 
-  // Fallbacks — only when direct scraping found nothing at all. When the domain
-  // maps to a known service slug, prefer curated catalog icons (selfhst,
-  // dashboardicons); Google faviconV2 is the last resort.
+  // Google faviconV2 is the universal last resort when scraping and catalogs
+  // both returned nothing.
   if (SCRAPER_FALLBACK) {
-    const catalogResult = await fetchScraperCatalogFallback(domain);
-    if (catalogResult) return catalogResult;
     return fetchScraperGoogleFallback(domain);
   }
 
@@ -1637,6 +1644,7 @@ module.exports = {
   fetchFaviconDev,
   fetchFaviconkit,
   fetchLogoDev,
+  fetchFaviconRun,
   fetchSelfhst,
   fetchDashboardIcons,
   fetchLobehub,
