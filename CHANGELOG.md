@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.6] — 2026-06-28
+
+### Added
+
+- **`UI_CARD_URL` environment variable** (default `proxy`) — controls which URL every favicon card shows and copies (metadata link, copy button, and click-on-icon). `proxy` = local proxy URL (`https://your-host/google/128/example.com`); `source` = upstream provider URL. Exposed to the Web UI via `urlMode` on `GET /providers`. logo.dev and Brandfetch always stay on proxy (upstream URLs embed API tokens). Documented in `.env.example`.
+
+### Fixed
+
+- **Web UI proxy URL size did not match displayed dimensions** — providers that never upscale (e.g. Yandex's fixed 16×16) still showed `/yandex/64/{domain}` while the card read `16×16`. The displayed and copied proxy URL now uses the smallest valid path size that matches the native image (e.g. `/yandex/16/{domain}`).
+
 ## [2.5.5] — 2026-06-28
 
 ### Fixed

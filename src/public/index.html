@@ -1842,7 +1842,7 @@
       'scraper', 'google', 'ddg', 'yandex', 'faviconso', 'vemetric', 'favicondev', 'faviconkit', 'faviconrun', 'logodev', 'brandfetch',
     ];
     const SERVICE_PROXY_PREFIX = { selfhst: '/selfhst', dashboardicons: '/dashboardicons', lobehub: '/lobehub', svgl: '/svgl' };
-    let providersConfig = { logoDev: false, logoDevToken: null, brandfetch: false, includeAppIcons: true };
+    let providersConfig = { logoDev: false, logoDevToken: null, brandfetch: false, includeAppIcons: true, urlMode: 'proxy' };
 
     function escapeHtml(s) {
       return String(s)
@@ -1854,6 +1854,77 @@
     }
 
     const COPY_ICON_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
+
+    function resolveCardUrl(proxyUrl, sourceUrl, opts = {}) {
+      const fullProxy = proxyUrl.startsWith('http') ? proxyUrl : `${location.origin}${proxyUrl}`;
+      if (opts.forceProxy || !sourceUrl) {
+        return { url: fullProxy, label: 'Copy proxy URL' };
+      }
+      if (providersConfig.urlMode === 'source') {
+        return { url: sourceUrl, label: 'Copy source URL' };
+      }
+      return { url: fullProxy, label: 'Copy proxy URL' };
+    }
+
+    // Resize routes never upscale: /yandex/64/… still serves a 16×16 upstream icon.
+    // Show the smallest offered path size that matches the native dimensions.
+    function adjustProxyUrlToNativeSize(proxyUrl, w, h) {
+      const native = Math.max(w || 0, h || 0);
+      if (native <= 0) return proxyUrl;
+
+      const standards = [16, 32, 64, 128, 180, 256, 512];
+      let path = proxyUrl;
+      let origin = '';
+      if (proxyUrl.startsWith('http')) {
+        try {
+          const u = new URL(proxyUrl);
+          path = u.pathname;
+          origin = u.origin;
+        } catch {
+          return proxyUrl;
+        }
+      }
+      const m = path.match(/^(\/[^/]+)\/(\d+)(\/.*)$/);
+      if (!m) return proxyUrl;
+
+      const requested = parseInt(m[2], 10);
+      if (!Number.isFinite(requested) || native > requested) return proxyUrl;
+
+      const effective = standards.find((s) => s >= native);
+      if (effective == null || effective >= requested) return proxyUrl;
+
+      const newPath = `${m[1]}/${effective}${m[3]}`;
+      return origin ? `${origin}${newPath}` : newPath;
+    }
+
+    function writeCardMeta(meta, display, { w, h, proxyUrl, sourceUrl, forceProxy }) {
+      const adjustedProxy = adjustProxyUrlToNativeSize(proxyUrl, w, h);
+      const { url, label } = resolveCardUrl(adjustedProxy, sourceUrl, { forceProxy });
+      const fullProxy = adjustedProxy.startsWith('http')
+        ? adjustedProxy
+        : `${location.origin}${adjustedProxy}`;
+      if (display) {
+        display.dataset.proxyUrl = fullProxy;
+        display.dataset.copyUrl = url;
+      }
+      const escapedUrl = escapeHtml(url);
+      meta.innerHTML =
+        `<span class="dimensions">${w}x${h}</span>` +
+        `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
+        `<button class="copy-btn" type="button" title="${label}" aria-label="${label}">${COPY_ICON_SVG}</button>`;
+      const copyBtn = meta.querySelector('.copy-btn');
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        copySource(copyBtn, url);
+      });
+    }
+
+    function clearDisplayUrls(display) {
+      if (!display) return;
+      delete display.dataset.proxyUrl;
+      delete display.dataset.copyUrl;
+    }
 
     const input = document.getElementById('domain-input');
     const selfhstToggle = document.getElementById('selfhst-toggle');
@@ -1882,7 +1953,7 @@
       if (spinner) spinner.style.display = 'none';
       if (meta) meta.textContent = '';
       const display = document.getElementById(`${id}-display`);
-      if (display) delete display.dataset.proxyUrl;
+      clearDisplayUrls(display);
       const unavailable = document.getElementById(`${id}-unavailable`);
       if (unavailable) unavailable.style.display = 'none';
       if (!card) return;
@@ -2574,18 +2645,11 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = `${location.origin}${proxyUrl}`;
-
-        const escapedUrl = escapeHtml(sourceUrl);
-        meta.innerHTML =
-          `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
-          `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-          `<button class="copy-btn" type="button" title="Copy source URL" aria-label="Copy source URL">${COPY_ICON_SVG}</button>`;
-        const copyBtn = meta.querySelector('.copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          copySource(copyBtn, sourceUrl);
+        writeCardMeta(meta, display, {
+          w: imgEl.naturalWidth,
+          h: imgEl.naturalHeight,
+          proxyUrl,
+          sourceUrl,
         });
         updateServiceIconsDivider();
       };
@@ -2599,7 +2663,7 @@
         } else {
           unavailable.textContent = 'variant not available';
           unavailable.style.display = 'block';
-          delete display.dataset.proxyUrl;
+          clearDisplayUrls(display);
         }
         updateServiceIconsDivider();
       };
@@ -2687,18 +2751,11 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = `${location.origin}${proxyUrl}`;
-
-        const escapedUrl = escapeHtml(sourceUrl);
-        meta.innerHTML =
-          `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
-          `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-          `<button class="copy-btn" type="button" title="Copy source URL" aria-label="Copy source URL">${COPY_ICON_SVG}</button>`;
-        const copyBtn = meta.querySelector('.copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          copySource(copyBtn, sourceUrl);
+        writeCardMeta(meta, display, {
+          w: imgEl.naturalWidth,
+          h: imgEl.naturalHeight,
+          proxyUrl,
+          sourceUrl,
         });
         updateServiceIconsDivider();
       };
@@ -2712,7 +2769,7 @@
         } else {
           unavailable.textContent = 'variant not available';
           unavailable.style.display = 'block';
-          delete display.dataset.proxyUrl;
+          clearDisplayUrls(display);
         }
         updateServiceIconsDivider();
       };
@@ -2795,18 +2852,11 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = `${location.origin}${proxyUrl}`;
-
-        const escapedUrl = escapeHtml(sourceUrl);
-        meta.innerHTML =
-          `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
-          `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-          `<button class="copy-btn" type="button" title="Copy source URL" aria-label="Copy source URL">${COPY_ICON_SVG}</button>`;
-        const copyBtn = meta.querySelector('.copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          copySource(copyBtn, sourceUrl);
+        writeCardMeta(meta, display, {
+          w: imgEl.naturalWidth,
+          h: imgEl.naturalHeight,
+          proxyUrl,
+          sourceUrl,
         });
         updateServiceIconsDivider();
       };
@@ -2818,7 +2868,7 @@
         } else {
           unavailable.textContent = 'variant not available';
           unavailable.style.display = 'block';
-          delete display.dataset.proxyUrl;
+          clearDisplayUrls(display);
         }
         updateServiceIconsDivider();
       };
@@ -2927,28 +2977,16 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = `${location.origin}${proxyUrl}`;
 
         const catalog = await catalogPromise;
         if (currentSvglSlug !== activeSlug || currentSvglVariant !== variant || currentSvglSize !== size) return;
         const sourceUrl = svglSourceFromCatalog(catalog, variant);
-
-        let metaHtml = `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>`;
-        if (sourceUrl) {
-          const escapedUrl = escapeHtml(sourceUrl);
-          metaHtml +=
-            `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-            `<button class="copy-btn" type="button" title="Copy source URL" aria-label="Copy source URL">${COPY_ICON_SVG}</button>`;
-        }
-        meta.innerHTML = metaHtml;
-        const copyBtn = meta.querySelector('.copy-btn');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            copySource(copyBtn, sourceUrl);
-          });
-        }
+        writeCardMeta(meta, display, {
+          w: imgEl.naturalWidth,
+          h: imgEl.naturalHeight,
+          proxyUrl,
+          sourceUrl: sourceUrl || null,
+        });
         updateServiceIconsDivider();
       };
       imgEl.onerror = () => {
@@ -2959,7 +2997,7 @@
         } else {
           unavailable.textContent = 'variant not available';
           unavailable.style.display = 'block';
-          delete display.dataset.proxyUrl;
+          clearDisplayUrls(display);
         }
         updateServiceIconsDivider();
       };
@@ -3008,31 +3046,24 @@
       );
     }
 
-    function showFaviconMeta(id, imgEl, proxyUrl, sourceUrl) {
-      const img = document.getElementById(`${id}-img`);
+    function showFaviconMeta(id, imgEl, proxyUrl, sourceUrl, opts = {}) {
       const meta = document.getElementById(`${id}-meta`);
-      const fullProxyUrl = `${location.origin}${proxyUrl}`;
-      img.closest('.favicon-display').dataset.proxyUrl = fullProxyUrl;
-
-      // HTML scraper: always show/copy the proxy URL, not the upstream site or asset URL.
-      const displayUrl = id === 'scraper' ? fullProxyUrl : sourceUrl;
-      const copyLabel = id === 'scraper' ? 'Copy proxy URL' : 'Copy source URL';
-      const escapedUrl = escapeHtml(displayUrl);
-      meta.innerHTML =
-        `<span class="dimensions">${imgEl.naturalWidth}x${imgEl.naturalHeight}</span>` +
-        `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-        `<button class="copy-btn" type="button" title="${copyLabel}" aria-label="${copyLabel}">${COPY_ICON_SVG}</button>`;
-      const copyBtn = meta.querySelector('.copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        copySource(copyBtn, displayUrl);
+      const display = document.getElementById(`${id}-display`) ||
+        document.getElementById(`${id}-img`)?.closest('.favicon-display');
+      const forceProxy = opts.forceProxy || id === 'logodev' || id === 'brandfetch';
+      writeCardMeta(meta, display, {
+        w: imgEl.naturalWidth,
+        h: imgEl.naturalHeight,
+        proxyUrl,
+        sourceUrl,
+        forceProxy,
       });
     }
 
     let scraperIcons = [];
     let scraperMaxIconSize = 0;
     let scraperAvailableSizes = {};
+    let scraperJsonSource = null;
     let currentScraperSelection = 0;
     let currentScraperProxySize = 128;
     let scraperLoadToken = 0;
@@ -3059,20 +3090,6 @@
       });
     }
 
-    function writeScraperMeta(meta, { w, h, displayUrl, copyLabel }) {
-      const escapedUrl = escapeHtml(displayUrl);
-      meta.innerHTML =
-        `<span class="dimensions">${w}x${h}</span>` +
-        `<a class="src-url" href="${escapedUrl}" target="_blank" rel="noopener" title="${escapedUrl}">${escapedUrl}</a>` +
-        `<button class="copy-btn" type="button" title="${copyLabel}" aria-label="${copyLabel}">${COPY_ICON_SVG}</button>`;
-      const copyBtn = meta.querySelector('.copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        copySource(copyBtn, displayUrl);
-      });
-    }
-
     function resetScraperDisplay(img, spinner, meta, display) {
       img.style.display = 'none';
       spinner.style.display = 'block';
@@ -3085,13 +3102,14 @@
 
     function loadScraperFallback(domain, refresh) {
       const proxyUrl = refresh ? `/scraper/${domain}?refresh=1` : `/scraper/${domain}`;
-      loadFavicon('scraper', proxyUrl, `${location.origin}/scraper/${domain}`);
+      loadFavicon('scraper', proxyUrl, scraperJsonSource);
     }
 
     function loadScraperFavicon(domain, refresh) {
       scraperIcons = [];
       scraperMaxIconSize = 0;
       scraperAvailableSizes = {};
+      scraperJsonSource = null;
       currentScraperSelection = 0;
       currentScraperProxySize = 128;
       const sizesEl = document.getElementById('scraper-sizes');
@@ -3148,6 +3166,7 @@
           icons = body?.endpoints?.scraper?.icons || [];
           scraperMaxIconSize = Number(body?.endpoints?.scraper?.maxIconSize) || 0;
           scraperAvailableSizes = body?.endpoints?.scraper?.sizes || {};
+          scraperJsonSource = body?.endpoints?.scraper?.source || null;
           wwwFallback = body?.endpoints?.scraper?.wwwFallback || null;
         }
       } catch {
@@ -3369,22 +3388,21 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = embedUrl;
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: scraperMaxIconSize,
           h: scraperMaxIconSize,
-          displayUrl: embedUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: embedUrl,
+          sourceUrl: scraperJsonSource,
         });
       };
       imgEl.onerror = () => {
         if (scraperLoadToken !== token || currentScraperSelection !== 'proxy') return;
         spinner.style.display = 'none';
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: scraperMaxIconSize,
           h: scraperMaxIconSize,
-          displayUrl: embedUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: embedUrl,
+          sourceUrl: scraperJsonSource,
         });
       };
       imgEl.src = `${proxyUrl}?_=${Date.now()}`;
@@ -3412,22 +3430,21 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = displayProxyUrl;
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: imgEl.naturalWidth || icon.width || 0,
           h: imgEl.naturalHeight || icon.height || 0,
-          displayUrl: displayProxyUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: displayProxyUrl,
+          sourceUrl: icon.url || null,
         });
       };
       imgEl.onerror = () => {
         if (scraperLoadToken !== token || currentScraperSelection !== idx) return;
         spinner.style.display = 'none';
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: icon.width || 0,
           h: icon.height || 0,
-          displayUrl: displayProxyUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: displayProxyUrl,
+          sourceUrl: icon.url || null,
         });
       };
       imgEl.src = `${proxyUrl}?_=${Date.now()}`;
@@ -3445,6 +3462,7 @@
       const token = ++scraperLoadToken;
       const embedUrl = `${location.origin}/scraper/${size}/${currentDomain}`;
       const proxyUrl = `/scraper/${size}/${currentDomain}`;
+      const sizeSource = scraperAvailableSizes[String(size)]?.source || scraperJsonSource || null;
 
       const img = document.getElementById('scraper-img');
       const spinner = document.getElementById('scraper-spinner');
@@ -3459,28 +3477,27 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
-        display.dataset.proxyUrl = embedUrl;
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: size,
           h: size,
-          displayUrl: embedUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: embedUrl,
+          sourceUrl: sizeSource,
         });
       };
       imgEl.onerror = () => {
         if (scraperLoadToken !== token) return;
         spinner.style.display = 'none';
-        writeScraperMeta(meta, {
+        writeCardMeta(meta, display, {
           w: size,
           h: size,
-          displayUrl: embedUrl,
-          copyLabel: 'Copy proxy URL',
+          proxyUrl: embedUrl,
+          sourceUrl: sizeSource,
         });
       };
       imgEl.src = `${proxyUrl}?_=${Date.now()}`;
     }
 
-    function loadFavicon(id, proxyUrl, sourceUrl) {
+    function loadFavicon(id, proxyUrl, sourceUrl, opts) {
       const img = document.getElementById(`${id}-img`);
       const spinner = document.getElementById(`${id}-spinner`);
       const meta = document.getElementById(`${id}-meta`);
@@ -3503,7 +3520,7 @@
         img.style.display = 'block';
         spinner.style.display = 'none';
         if (card) card.style.display = '';
-        showFaviconMeta(id, imgEl, proxyUrl, sourceUrl);
+        showFaviconMeta(id, imgEl, proxyUrl, sourceUrl, opts);
       };
       imgEl.onerror = () => {
         spinner.style.display = 'none';
@@ -3572,7 +3589,7 @@
     }
 
     async function copyImage(display) {
-      const url = display.dataset.proxyUrl;
+      const url = display.dataset.copyUrl || display.dataset.proxyUrl;
       if (!url) return;
 
       try {

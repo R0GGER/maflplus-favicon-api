@@ -75,6 +75,11 @@ const UI_INCLUDE_APP_ICONS = (() => {
   return !['false', '0', 'no', 'off'].includes(raw);
 })();
 
+const UI_CARD_URL = (() => {
+  const raw = String(process.env.UI_CARD_URL ?? '').trim().toLowerCase();
+  return raw === 'source' ? 'source' : 'proxy';
+})();
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -1183,6 +1188,7 @@ app.get('/providers', (req, res) => {
     brandfetch: !!process.env.BRANDFETCH_CLIENT_ID,
     defaultProvider: (process.env.DEFAULT_PROVIDER || '').trim().toLowerCase() || null,
     includeAppIcons: UI_INCLUDE_APP_ICONS,
+    urlMode: UI_CARD_URL,
     upstreamIpv4: true,
     api: {
       requireKey: API_REQUIRE_KEY,
