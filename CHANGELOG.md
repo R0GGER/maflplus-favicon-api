@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.4] — 2026-06-28
+
+### Changed
+
+- **Brandfetch — `fallback/404` and no placeholder icons** — upstream URL now uses Brandfetch's documented `…/h/{size}/w/{size}/fallback/404/icon?c=…` form so unknown domains return 404 instead of the Brandfetch "B" mark or other generated fallbacks. Responses that are not `image/*`, fully transparent, or the known 128px placeholder hash are rejected; the proxy returns **502** and the Web UI hides the card. Upstream requests send a domain `Referer` header. Valid sizes: **16, 32, 64, 128, 256, 512**.
+
+### Fixed
+
+- **Brandfetch Web UI shown on service lookups** — searching by app name (e.g. `google`) no longer leaves the Brandfetch card visible alongside selfh.st / dashboardicons / LobeHub; the card is domain-only, reset on service searches, and placed with the other favicon providers above the "App Icons" divider.
+
+## [2.5.3] — 2026-06-28
+
+### Changed
+
+- **Brandfetch — native upstream sizing** — `/brandfetch/{size}/{domain}` now requests the icon at the requested size directly from Brandfetch (`https://cdn.brandfetch.io/{domain}/h/{size}/w/{size}/icon.png?c=…`) instead of fetching a default icon and resizing server-side. Valid sizes: **32, 64, 128, 256, 512**. The Web UI card gains a size-button strip; `/{domain}/json` advertises the updated size set. Legacy `/bf/{domain}` defaults to 128px.
+
 ## [2.5.2] — 2026-06-28
 
 ### Changed

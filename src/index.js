@@ -222,6 +222,8 @@ const VALID_LOBEHUB_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_SVGL_VARIANTS = new Set(['color', 'light', 'dark']);
 const VALID_FAVICONRUN_SIZES = new Set([16, 32, 64, 128, 256]);
 const FAVICONRUN_SIZES_ARRAY = [16, 32, 64, 128, 256];
+const VALID_BRANDFETCH_SIZES = new Set([16, 32, 64, 128, 256, 512]);
+const BRANDFETCH_SIZES_ARRAY = [16, 32, 64, 128, 256, 512];
 const VALID_LOBEHUB_SIZES = new Set([64, 128, 256]);
 const VALID_SVGL_SIZES = new Set([64, 128, 256]);
 const DEFAULT_LOBEHUB_SIZE = 128;
@@ -708,17 +710,17 @@ async function brandfetchSizedHandler(req, res) {
   }
 
   const size = parseInt(req.params.size, 10);
-  if (!RESIZE_SIZES.has(size)) {
-    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, or 256.' });
+  if (!VALID_BRANDFETCH_SIZES.has(size)) {
+    return res.status(400).json({ error: 'Invalid size. Use 16, 32, 64, 128, 256, or 512.' });
   }
 
   const domain = extractDomain(req.params.domain);
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
   try {
-    const entry = await fetchWithCache('brandfetch', domain, null, () => fetchBrandfetch(domain));
+    const entry = await fetchWithCache('brandfetch', domain, size, () => fetchBrandfetch(domain, size));
     if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
-    sendFavicon(res, await downscaleEntryToSize(entry, size));
+    sendFavicon(res, entry);
   } catch (err) {
     console.error('Brandfetch proxy error:', err.message);
     res.status(500).json({ error: 'Internal error.' });
@@ -735,7 +737,9 @@ app.get('/bf/:domain', async (req, res) => {
   if (!domain) return res.status(400).json({ error: 'Invalid domain.' });
 
   try {
-    const entry = await fetchWithCache('brandfetch', domain, null, () => fetchBrandfetch(domain));
+    const entry = await fetchWithCache('brandfetch', domain, DEFAULT_NATIVE_SIZE, () =>
+      fetchBrandfetch(domain, DEFAULT_NATIVE_SIZE)
+    );
     if (!entry) return res.status(502).json({ error: 'Upstream fetch failed.' });
     sendFavicon(res, entry);
   } catch (err) {
@@ -1314,12 +1318,12 @@ app.get('/:domain/json', async (req, res) => {
 
   const brandfetchConfigured = !!process.env.BRANDFETCH_CLIENT_ID;
   const brandfetch = {
-    proxy: `${host}/brandfetch/${DEFAULT_RESIZE_SIZE}/${encoded}`,
+    proxy: `${host}/brandfetch/${DEFAULT_NATIVE_SIZE}/${encoded}`,
     // Omit upstream URL: it embeds BRANDFETCH_CLIENT_ID in the query string.
     source: null,
     configured: brandfetchConfigured,
     sizes: sizedEntries(
-      RESIZE_SIZES_ARRAY,
+      BRANDFETCH_SIZES_ARRAY,
       (size) => `/brandfetch/${size}/${encoded}`,
       () => null
     ),

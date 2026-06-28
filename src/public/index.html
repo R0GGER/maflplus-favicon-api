@@ -105,7 +105,7 @@
     }
 
     /* Logo, search bar, tip, footer: centered, 3 of 4 columns wide */
-    .container > :not(#results) {
+    .container > :not(#results):not(.site-logo-link) {
       width: 75%;
       max-width: 960px;
       margin-left: auto;
@@ -1106,7 +1106,7 @@
     }
 
     @media (max-width: 700px) {
-      .container > :not(#results) {
+      .container > :not(#results):not(.site-logo-link) {
         width: 100%;
         max-width: none;
       }
@@ -1470,6 +1470,25 @@
         <div class="meta" id="faviconrun-meta"></div>
       </div>
 
+      <!-- Brandfetch -->
+      <div class="card" id="brandfetch-card" data-card-type="domain" style="display:none">
+        <h3>Brandfetch.io</h3>
+        <div class="favicon-display" id="brandfetch-display" onclick="copyImage(this)">
+          <div class="spinner" id="brandfetch-spinner" style="display:none"></div>
+          <img id="brandfetch-img" style="display:none" alt="Brandfetch favicon">
+          <span class="copied-toast">URL copied!</span>
+        </div>
+        <div class="size-buttons" id="brandfetch-sizes">
+          <button class="size-btn" onclick="switchBrandfetchSize(512)">512</button>
+          <button class="size-btn" onclick="switchBrandfetchSize(256)">256</button>
+          <button class="size-btn active" onclick="switchBrandfetchSize(128)">128</button>
+          <button class="size-btn" onclick="switchBrandfetchSize(64)">64</button>
+          <button class="size-btn" onclick="switchBrandfetchSize(32)">32</button>
+          <button class="size-btn" onclick="switchBrandfetchSize(16)">16</button>
+        </div>
+        <div class="meta" id="brandfetch-meta"></div>
+      </div>
+
       <!-- logo.dev -->
       <div class="card" id="logodev-card" data-card-type="domain" style="display:none">
         <h3>logo.dev</h3>
@@ -1479,17 +1498,6 @@
           <span class="copied-toast">URL copied!</span>
         </div>
         <div class="meta" id="logodev-meta"></div>
-      </div>
-
-      <!-- Brandfetch -->
-      <div class="card" id="brandfetch-card" data-card-type="domain" style="display:none">
-        <h3>Brandfetch.io</h3>
-        <div class="favicon-display" id="brandfetch-display" onclick="copyImage(this)">
-          <div class="spinner" id="brandfetch-spinner" style="display:none"></div>
-          <img id="brandfetch-img" style="display:none" alt="Brandfetch favicon">
-          <span class="copied-toast">URL copied!</span>
-        </div>
-        <div class="meta" id="brandfetch-meta"></div>
       </div>
 
       <div class="results-section-divider" id="service-icons-divider" aria-hidden="true">App Icons</div>
@@ -1813,6 +1821,7 @@
     let currentGoogleSize = 128;
     let currentFaviconkitSize = 128;
     let currentFaviconrunSize = 128;
+    let currentBrandfetchSize = 128;
     let currentSelfhstSlug = '';
     let currentSelfhstVariant = 'color';
     let selfhstProbeSeq = 0;
@@ -1878,7 +1887,7 @@
       if (!card) return;
       if (id === 'logodev' && !providersConfig.logoDev) {
         card.style.display = 'none';
-      } else if (id === 'brandfetch' && !providersConfig.brandfetch) {
+      } else if (id === 'brandfetch') {
         card.style.display = 'none';
       } else if (SERVICE_ICON_PROVIDERS.includes(id)) {
         card.style.display = 'none';
@@ -1894,6 +1903,7 @@
       currentGoogleSize = 128;
       currentFaviconkitSize = 128;
       currentFaviconrunSize = 128;
+      currentBrandfetchSize = 128;
       currentSelfhstSlug = '';
       currentSelfhstVariant = 'color';
       currentDashboardIconsSlug = '';
@@ -1938,6 +1948,7 @@
       setActiveSize('google-sizes', 128);
       setActiveSize('faviconkit-sizes', 128);
       setActiveSize('faviconrun-sizes', 128);
+      setActiveSize('brandfetch-sizes', 128);
       resetSelfhstVariantButtons();
       resetDashboardIconsVariantButtons();
       resetLobehubVariantButtons();
@@ -1954,7 +1965,7 @@
         }
         const brandfetchCard = document.getElementById('brandfetch-card');
         if (providersConfig.brandfetch) {
-          brandfetchCard.style.display = '';
+          brandfetchCard.style.display = 'none';
         }
       })
       .catch(() => {})
@@ -2237,7 +2248,11 @@
     function showCardsByType(type) {
       document.querySelectorAll('[data-card-type="domain"]').forEach((card) => {
         if (card.id === 'logodev-card' && !providersConfig.logoDev) return;
-        if (card.id === 'brandfetch-card' && !providersConfig.brandfetch) return;
+        // Shown only after a successful domain fetch (loadFavicon onload), never in service mode.
+        if (card.id === 'brandfetch-card' || card.id === 'logodev-card') {
+          if (type !== 'domain') card.style.display = 'none';
+          return;
+        }
         card.style.display = type === 'domain' ? '' : 'none';
       });
       updateServiceIconsDivider();
@@ -2343,7 +2358,7 @@
       }
 
       if (providersConfig.brandfetch) {
-        loadFavicon('brandfetch', `/brandfetch/64/${domain}`, `${location.origin}/brandfetch/64/${domain}`);
+        initSizedCard('brandfetch', domain);
       }
 
       if (selfhstToggle.checked) {
@@ -2383,6 +2398,7 @@
 
       showCardsByType('service');
 
+      resetFaviconCard('brandfetch');
       setServiceCardsVisible(true);
       startServiceIconLoads(resolveData, true);
     }
@@ -2404,6 +2420,11 @@
 
     function loadFaviconrun(domain, size) {
       loadFavicon('faviconrun', `/faviconrun/${size}/${domain}`, `https://favicon.run/favicon?domain=${domain}&sz=${size}`);
+    }
+
+    function loadBrandfetch(domain, size) {
+      // Proxy URL only — upstream embeds BRANDFETCH_CLIENT_ID in the query string.
+      loadFavicon('brandfetch', `/brandfetch/${size}/${domain}`, `${location.origin}/brandfetch/${size}/${domain}`);
     }
 
     // Cards whose upstreams (Google, FaviconKit) don't actually have an icon at
@@ -2435,6 +2456,14 @@
         probePath: (d) => `/faviconrun/256/${d}`,
         setCurrent: (s) => { currentFaviconrunSize = s; },
         load: (d, s) => loadFaviconrun(d, s),
+      },
+      brandfetch: {
+        group: 'brandfetch-sizes',
+        sizes: [512, 256, 128, 64, 32, 16],
+        preferred: 128,
+        probePath: (d) => `/brandfetch/512/${d}`,
+        setCurrent: (s) => { currentBrandfetchSize = s; },
+        load: (d, s) => loadBrandfetch(d, s),
       },
     };
 
@@ -3427,7 +3456,7 @@
       const meta = document.getElementById(`${id}-meta`);
       const card = img.closest('.card');
 
-      if (card) card.style.display = '';
+      if (card && id !== 'brandfetch') card.style.display = '';
       img.style.display = 'none';
       spinner.style.display = 'block';
       meta.textContent = '';
@@ -3443,6 +3472,7 @@
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
+        if (card) card.style.display = '';
         showFaviconMeta(id, imgEl, proxyUrl, sourceUrl);
       };
       imgEl.onerror = () => {
@@ -3475,6 +3505,13 @@
       currentFaviconrunSize = size;
       setActiveSize('faviconrun-sizes', size);
       loadFaviconrun(currentDomain, size);
+    }
+
+    function switchBrandfetchSize(size) {
+      if (!currentDomain) return;
+      currentBrandfetchSize = size;
+      setActiveSize('brandfetch-sizes', size);
+      loadBrandfetch(currentDomain, size);
     }
 
     function setActiveSize(groupId, size) {

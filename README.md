@@ -173,7 +173,7 @@ All providers run in parallel on `/{domain}`; each also has its own route.
 | [Faviconkit](https://faviconkit.net/)                                               | `/faviconkit/{size}/{domain}` | `/k/`  | Sizes 16, 32, 64, 128, 256                                                                                                                                                                  |
 | [Favicon.run](https://favicon.run/)                                                 | `/faviconrun/{size}/{domain}` | `/fr/` | Sizes 16, 32, 64, 128, 256                                                                                                                                                                  |
 | [logo.dev](https://www.logo.dev/)                                                   | `/logodev/{size}/{domain}`    | `/l/`  | Requires `LOGODEV_TOKEN`; resized server-side                                                                                                                                               |
-| [Brandfetch](https://brandfetch.com/developers/logo-api)                            | `/brandfetch/{size}/{domain}` | `/bf/` | Requires `BRANDFETCH_CLIENT_ID`; resized server-side                                                                                                                                        |
+| [Brandfetch](https://brandfetch.com/developers/logo-api)                            | `/brandfetch/{size}/{domain}` | `/bf/` | Requires `BRANDFETCH_CLIENT_ID`; native sizes 16, 32, 64, 128, 256, 512; `fallback/404` (no lettermark/placeholder)                                                                                                                                         |
 
 
 ### App/Service-icon catalogs
@@ -192,6 +192,7 @@ Look up an icon by app/service name (e.g. `jellyfin`). All support `?variant=col
 ### Sizes
 
 - **Resized server-side** providers and catalogs accept sizes **16, 32, 64, 128, 256**.
+- **Brandfetch** uses native upstream sizes **16, 32, 64, 128, 256, 512** (via Brandfetch's `/h/{size}/w/{size}/icon.png` path).
 - **LobeHub** and **SVGL** use sizes **64, 128, 256**.
 - Legacy short aliases also accept the original sizeless form (e.g. `/sh/{service}`, `/d/{domain}`).
 

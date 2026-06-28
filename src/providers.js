@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const cheerio = require('cheerio');
 const sharp = require('sharp');
 const { rasterizeSvgToSize, readImageDimensions, toDisplayPng, looksLikeSvg, isBlankFavicon, MIN_SOURCE_SIZE } = require('./imageNormalize');
@@ -465,8 +466,8 @@ const PROVIDERS = {
     `https://ico.faviconkit.net/favicon/${encodeURIComponent(domain)}?sz=${size}`,
   logoDev: (domain, token) =>
     `https://img.logo.dev/${encodeURIComponent(domain)}?token=${encodeURIComponent(token || '')}`,
-  brandfetch: (domain, clientId) =>
-    `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?c=${encodeURIComponent(clientId || '')}`,
+  brandfetch: (domain, clientId, size = 128) =>
+    `https://cdn.brandfetch.io/${encodeURIComponent(domain)}/h/${size}/w/${size}/fallback/404/icon?c=${encodeURIComponent(clientId || '')}`,
   selfhst: (service, variant = 'color') => {
     const suffix = pngVariantSuffix(variant);
     return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${encodeURIComponent(service)}${suffix}.png`;
@@ -495,6 +496,27 @@ const FAVICON_FETCH_HEADERS = {
   'User-Agent': SCRAPER_USER_AGENT,
   Accept: 'image/avif,image/webp,image/apng,image/png,image/*;q=0.8',
 };
+
+// Brandfetch serves its own "B" mark when a domain has no icon but fallback/404
+// is not honoured (or a stale cache entry used the old URL without fallback/404).
+const BRANDFETCH_PLACEHOLDER_SHA256 = new Set([
+  '8436afdb367436824cc3a1e960006af724a5cb7ff4087fe3c938c307389a34a6', // 128px webp
+]);
+
+function brandfetchFetchHeaders(domain) {
+  return {
+    ...FAVICON_FETCH_HEADERS,
+    Referer: `https://${domain}/`,
+  };
+}
+
+function isBrandfetchPlaceholder(buffer, domain) {
+  if (!buffer || buffer.length === 0) return false;
+  const lower = String(domain || '').toLowerCase().replace(/^www\./, '');
+  if (lower === 'brandfetch.io') return false;
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  return BRANDFETCH_PLACEHOLDER_SHA256.has(hash);
+}
 
 async function fetchFavicon(url, requestHeaders) {
   const controller = new AbortController();
@@ -585,12 +607,19 @@ async function fetchFaviconRun(domain, size = 128) {
   return result ? { ...result, provider: 'faviconrun' } : null;
 }
 
-async function fetchBrandfetch(domain) {
+async function fetchBrandfetch(domain, size = 128) {
   const clientId = process.env.BRANDFETCH_CLIENT_ID;
   if (!clientId) return null;
-  const url = PROVIDERS.brandfetch(domain, clientId);
-  const result = await fetchFavicon(url);
-  return result ? { ...result, provider: 'brandfetch' } : null;
+  const url = PROVIDERS.brandfetch(domain, clientId, size);
+  const result = await fetchFavicon(url, brandfetchFetchHeaders(domain));
+  if (!result) return null;
+
+  const contentType = (result.contentType || '').toLowerCase();
+  if (!contentType.startsWith('image/')) return null;
+  if (await isBlankFavicon(result.buffer, result)) return null;
+  if (isBrandfetchPlaceholder(result.buffer, domain)) return null;
+
+  return { ...result, provider: 'brandfetch' };
 }
 
 const {
