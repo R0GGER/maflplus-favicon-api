@@ -100,8 +100,16 @@
     }
 
     .container {
-      max-width: 960px;
+      max-width: 1280px;
       margin: 0 auto;
+    }
+
+    /* Logo, search bar, tip, footer: centered, 3 of 4 columns wide */
+    .container > :not(#results) {
+      width: 75%;
+      max-width: 960px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .site-logo-link {
@@ -559,8 +567,12 @@
 
     .results.visible {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       grid-template-rows: auto;
+      width: 100%;
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
     }
 
     .results-section-divider {
@@ -1089,7 +1101,16 @@
       margin-bottom: 1rem;
     }
 
+    @media (max-width: 1050px) {
+      .results.visible { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
     @media (max-width: 700px) {
+      .container > :not(#results) {
+        width: 100%;
+        max-width: none;
+      }
+
       .results.visible { grid-template-columns: minmax(0, 1fr); }
       h1 { font-size: 1.8rem; }
       .top-nav {
