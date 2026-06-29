@@ -17,7 +17,6 @@ const {
 } = require('./providers');
 const cache = require('./cache');
 const { isBlankFavicon } = require('./imageNormalize');
-const { iconTagForDomain } = require('./domainIconTags');
 const { serviceSlugFromDomain } = require('./serviceSlugFromDomain');
 
 const VALID_DEFAULT_PROVIDERS = new Set([
@@ -89,33 +88,6 @@ function scoreCandidate(info) {
   return score;
 }
 
-const CATALOG_RACE_KEYS = ['selfhst', 'dashboardicons', 'lobehub', 'svgl'];
-
-const GENERIC_BEST_PICK_PROVIDERS = new Set([
-  'google', 'googlev2', 'duckduckgo', 'faviconkit', 'faviconrun',
-  'faviconso', 'vemetric', 'favicondev', 'yandex',
-]);
-
-function isAcceptableTaggedBestCache(entry) {
-  if (!entry?.provider) return false;
-  const provider = entry.provider;
-  if (provider === 'scraper' || provider.startsWith('scraper-fallback:')) return true;
-  if (CATALOG_RACE_KEYS.includes(provider)) return true;
-  return !GENERIC_BEST_PICK_PROVIDERS.has(provider);
-}
-
-function buildDomainRaceOrder(domain, all) {
-  const baseOrder = [
-    'scraper', 'googlev2', 'duckduckgo',
-    'google', 'faviconkit', 'faviconrun', 'faviconso', 'vemetric', 'favicondev', 'yandex',
-  ];
-
-  if (!iconTagForDomain(domain)) return baseOrder;
-
-  const catalogs = CATALOG_RACE_KEYS.filter((k) => all[k]);
-  return ['scraper', ...catalogs];
-}
-
 function buildFallbackFetchers(domain) {
   const all = {
     scraper:    () => fetchWithCache('scraper', domain, null, () => fetchScraper(domain)),
@@ -157,7 +129,10 @@ function buildFallbackFetchers(domain) {
       );
   }
 
-  const defaultOrder = buildDomainRaceOrder(domain, all);
+  const defaultOrder = [
+    'scraper', 'googlev2', 'duckduckgo',
+    'google', 'faviconkit', 'faviconrun', 'faviconso', 'vemetric', 'favicondev', 'yandex',
+  ];
 
   if (DEFAULT_PROVIDER && all[DEFAULT_PROVIDER]) {
     const rest = defaultOrder.filter((k) => k !== DEFAULT_PROVIDER);
@@ -242,36 +217,9 @@ async function raceFetchers(fallbacks, cacheProvider, cacheKey, cacheSize) {
   }
 }
 
-async function pickBest(domain, { refresh = false } = {}) {
-  const tagged = !!iconTagForDomain(domain);
-
-  if (!refresh) {
-    const cached = await cache.get('best', domain, 32);
-    if (cached) {
-      // Pre-fix best-pick entries (e.g. duckduckgo for drive.google.com) must
-      // not mask the scraper catalog fallback for explicit domainIconTags hosts.
-      if (!tagged || isAcceptableTaggedBestCache(cached)) return cached;
-      await cache.del('best', domain, 32);
-    }
-  } else {
-    await cache.del('best', domain, 32);
-  }
-
-  // Same chain as GET /scraper/{domain} — avoids the best-pick race returning a
-  // fast parent-brand favicon (e.g. Google "G" for drive.google.com).
-  if (iconTagForDomain(domain)) {
-    const scraperEntry = await fetchWithCache('scraper', domain, null, () => fetchScraper(domain));
-    if (scraperEntry) {
-      const entry = {
-        buffer: scraperEntry.buffer,
-        contentType: scraperEntry.contentType,
-        provider: scraperEntry.provider,
-        url: scraperEntry.url,
-      };
-      await cache.set('best', domain, 32, entry);
-      return entry;
-    }
-  }
+async function pickBest(domain) {
+  const cached = await cache.get('best', domain, 32);
+  if (cached) return cached;
 
   const fallbacks = buildFallbackFetchers(domain);
   return raceFetchers(fallbacks, 'best', domain, 32);
