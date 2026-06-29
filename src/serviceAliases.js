@@ -888,12 +888,6 @@ async function resolveServiceMatches(slug, { strict = false } = {}) {
   };
 }
 
-function getLobehubVariantAvailability(slug) {
-  if (!slug) return null;
-  const index = lobehubCache.entries?.size ? lobehubCache : ensureLobehubSyncIndex();
-  if (!index.entries?.has(slug)) return null;
-  return { color: true, light: true, dark: true };
-}
 
 function getSvglEntrySync(slug) {
   const queryKey = normalizeServiceAliasKey(slug);
@@ -983,7 +977,6 @@ module.exports = {
   ensureSelfhstIndex,
   ensureLobehubIndex,
   ensureSvglIndex,
-  getLobehubVariantAvailability,
   getSvglVariantAvailability,
   getSvglEntrySync,
 };

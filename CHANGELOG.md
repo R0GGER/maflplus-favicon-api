@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] — 2026-06-29
+
+### Changed
+
+- **Proxy URL scheme — format in path** — domain providers now use `/{provider}/{size}/{ext}/{domain}` (e.g. `/google/128/png/github.com`, `/duckduckgo/32/png/github.com`). Catalog providers (selfh.st, dashboardicons, LobeHub, SVGL) use `/{provider}/{size}/{format}/{service}` with `png` or `svg` instead of `?format=`. Vemetric accepts `png`, `jpg`, or `webp` in the path (`?format=` still works). Legacy three-segment routes (`/{provider}/{size}/{domain}`) remain aliases defaulting to `png`. logo.dev and Brandfetch are unchanged.
+- **`/{domain}/json` discovery** — `proxy` and per-size entries now include the `/png/` path segment for all providers that use the new scheme.
+- **Web UI — PNG | SVG on catalog cards** — selfh.st, dashboardicons.com, and LobeHub cards gain a **PNG | SVG** toggle; size buttons hide when SVG is selected.
+- **LobeHub light/dark variants** — availability is probed against `@lobehub/icons-static-png` theme assets (`/light/{slug}.png`, `/dark/{slug}.png`) instead of the color SVG URL, so Light/Dark buttons only appear when those PNGs exist. Light/dark requests serve the upstream theme PNGs; SVG format remains color-only.
+- **Web UI — service icon controls** — extension (PNG/SVG) and color (Color/Light/Dark) toggles on selfh.st, dashboardicons.com, LobeHub, and SVGL cards are now compact Bootstrap-style button groups on one row; size buttons use the same grouped style on a separate row.
+
+### Fixed
+
+- **ICO upstreams served on `/png/` routes** (e.g. DuckDuckGo's `…/github.com.ico` on `/duckduckgo/32/png/github.com`) — upstream `image/x-icon` bytes are now decoded to PNG via `normalizeEntryForPng()` before resize and on legacy sizeless routes (`/d/{domain}`, `/y/{domain}`, etc.). BMP ICO frames are converted BGRA→RGBA before rasterization. Failed ICO conversion no longer falls back to serving raw ICO with a PNG content-type.
+
 ## [2.5.15] — 2026-06-28
 
 ### Changed

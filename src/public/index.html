@@ -691,13 +691,55 @@
       overflow: visible;
     }
 
+    .size-buttons-toolbar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.6rem;
+      overflow: visible;
+    }
+
+    .size-buttons-toolbar .size-buttons {
+      margin-bottom: 0;
+    }
+
+    .size-buttons.btn-group {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      gap: 0;
+    }
+
+    .btn-group .size-btn {
+      border-radius: 0;
+      margin-left: -1px;
+    }
+
+    .btn-group .size-btn:first-child {
+      margin-left: 0;
+      border-top-left-radius: 4px;
+      border-bottom-left-radius: 4px;
+    }
+
+    .btn-group .size-btn:last-child {
+      border-top-right-radius: 4px;
+      border-bottom-right-radius: 4px;
+    }
+
+    .btn-group .size-btn:hover,
+    .btn-group .size-btn.active,
+    .btn-group .size-btn:focus-visible {
+      position: relative;
+      z-index: 1;
+    }
+
     .size-btn {
       border: 1px solid #5b2e7e;
       background: transparent;
       color: #5b2e7e;
-      padding: 0.3rem 0.7rem;
+      padding: 0.3rem 0.5rem;
       border-radius: 4px;
-      font-size: 0.8rem;
+      font-size: 0.7rem;
       cursor: pointer;
       font-weight: 500;
       transition: all 0.15s;
@@ -1598,10 +1640,23 @@
           <span class="unavailable" id="selfhst-unavailable" style="display:none">variant not available</span>
           <span class="copied-toast">URL copied!</span>
         </div>
-        <div class="size-buttons" id="selfhst-variants">
-          <button class="size-btn active" data-variant="color" onclick="switchSelfhstVariant('color')">Color</button>
-          <button class="size-btn" data-variant="light" style="display:none" onclick="switchSelfhstVariant('light')">Light</button>
-          <button class="size-btn" data-variant="dark" style="display:none" onclick="switchSelfhstVariant('dark')">Dark</button>
+        <div class="size-buttons-toolbar">
+          <div class="size-buttons btn-group" id="selfhst-format" role="group" aria-label="Extension">
+            <button class="size-btn active" data-format="png" type="button" onclick="switchSelfhstFormat('png')">PNG</button>
+            <button class="size-btn" data-format="svg" type="button" onclick="switchSelfhstFormat('svg')">SVG</button>
+          </div>
+          <div class="size-buttons btn-group" id="selfhst-variants" role="group" aria-label="Color">
+            <button class="size-btn active" data-variant="color" onclick="switchSelfhstVariant('color')">Color</button>
+            <button class="size-btn" data-variant="light" style="display:none" onclick="switchSelfhstVariant('light')">Light</button>
+            <button class="size-btn" data-variant="dark" style="display:none" onclick="switchSelfhstVariant('dark')">Dark</button>
+          </div>
+        </div>
+        <div class="size-buttons btn-group" id="selfhst-sizes">
+          <button class="size-btn" onclick="switchSelfhstSize(256)">256</button>
+          <button class="size-btn active" onclick="switchSelfhstSize(128)">128</button>
+          <button class="size-btn" onclick="switchSelfhstSize(64)">64</button>
+          <button class="size-btn" onclick="switchSelfhstSize(32)">32</button>
+          <button class="size-btn" onclick="switchSelfhstSize(16)">16</button>
         </div>
         <div class="meta" id="selfhst-meta"></div>
         <div class="service-candidates" id="selfhst-candidates" hidden>
@@ -1624,10 +1679,23 @@
           <span class="unavailable" id="dashboardicons-unavailable" style="display:none">variant not available</span>
           <span class="copied-toast">URL copied!</span>
         </div>
-        <div class="size-buttons" id="dashboardicons-variants">
-          <button class="size-btn active" data-variant="color" onclick="switchDashboardIconsVariant('color')">Color</button>
-          <button class="size-btn" data-variant="light" style="display:none" onclick="switchDashboardIconsVariant('light')">Light</button>
-          <button class="size-btn" data-variant="dark" style="display:none" onclick="switchDashboardIconsVariant('dark')">Dark</button>
+        <div class="size-buttons-toolbar">
+          <div class="size-buttons btn-group" id="dashboardicons-format" role="group" aria-label="Extension">
+            <button class="size-btn active" data-format="png" type="button" onclick="switchDashboardIconsFormat('png')">PNG</button>
+            <button class="size-btn" data-format="svg" type="button" onclick="switchDashboardIconsFormat('svg')">SVG</button>
+          </div>
+          <div class="size-buttons btn-group" id="dashboardicons-variants" role="group" aria-label="Color">
+            <button class="size-btn active" data-variant="color" onclick="switchDashboardIconsVariant('color')">Color</button>
+            <button class="size-btn" data-variant="light" style="display:none" onclick="switchDashboardIconsVariant('light')">Light</button>
+            <button class="size-btn" data-variant="dark" style="display:none" onclick="switchDashboardIconsVariant('dark')">Dark</button>
+          </div>
+        </div>
+        <div class="size-buttons btn-group" id="dashboardicons-sizes">
+          <button class="size-btn" onclick="switchDashboardIconsSize(256)">256</button>
+          <button class="size-btn active" onclick="switchDashboardIconsSize(128)">128</button>
+          <button class="size-btn" onclick="switchDashboardIconsSize(64)">64</button>
+          <button class="size-btn" onclick="switchDashboardIconsSize(32)">32</button>
+          <button class="size-btn" onclick="switchDashboardIconsSize(16)">16</button>
         </div>
         <div class="meta" id="dashboardicons-meta"></div>
         <div class="service-candidates" id="dashboardicons-candidates" hidden>
@@ -1650,12 +1718,18 @@
           <span class="unavailable" id="lobehub-unavailable" style="display:none">variant not available</span>
           <span class="copied-toast">URL copied!</span>
         </div>
-        <div class="size-buttons" id="lobehub-variants">
-          <button class="size-btn active" data-variant="color" onclick="switchLobehubVariant('color')">Color</button>
-          <button class="size-btn" data-variant="light" style="display:none" onclick="switchLobehubVariant('light')">Light</button>
-          <button class="size-btn" data-variant="dark" style="display:none" onclick="switchLobehubVariant('dark')">Dark</button>
+        <div class="size-buttons-toolbar">
+          <div class="size-buttons btn-group" id="lobehub-format" role="group" aria-label="Extension">
+            <button class="size-btn active" data-format="png" type="button" onclick="switchLobehubFormat('png')">PNG</button>
+            <button class="size-btn" data-format="svg" type="button" onclick="switchLobehubFormat('svg')">SVG</button>
+          </div>
+          <div class="size-buttons btn-group" id="lobehub-variants" role="group" aria-label="Color">
+            <button class="size-btn active" data-variant="color" onclick="switchLobehubVariant('color')">Color</button>
+            <button class="size-btn" data-variant="light" style="display:none" onclick="switchLobehubVariant('light')">Light</button>
+            <button class="size-btn" data-variant="dark" style="display:none" onclick="switchLobehubVariant('dark')">Dark</button>
+          </div>
         </div>
-        <div class="size-buttons" id="lobehub-sizes">
+        <div class="size-buttons btn-group" id="lobehub-sizes">
           <button class="size-btn" onclick="switchLobehubSize(256)">256</button>
           <button class="size-btn active" onclick="switchLobehubSize(128)">128</button>
           <button class="size-btn" onclick="switchLobehubSize(64)">64</button>
@@ -1681,12 +1755,12 @@
           <span class="unavailable" id="svgl-unavailable" style="display:none">variant not available</span>
           <span class="copied-toast">URL copied!</span>
         </div>
-        <div class="size-buttons" id="svgl-variants">
+        <div class="size-buttons btn-group" id="svgl-variants" role="group" aria-label="Color">
           <button class="size-btn active" data-variant="color" onclick="switchSvglVariant('color')">Color</button>
           <button class="size-btn" data-variant="light" style="display:none" onclick="switchSvglVariant('light')">Light</button>
           <button class="size-btn" data-variant="dark" style="display:none" onclick="switchSvglVariant('dark')">Dark</button>
         </div>
-        <div class="size-buttons" id="svgl-sizes">
+        <div class="size-buttons btn-group" id="svgl-sizes">
           <button class="size-btn" onclick="switchSvglSize(256)">256</button>
           <button class="size-btn active" onclick="switchSvglSize(128)">128</button>
           <button class="size-btn" onclick="switchSvglSize(64)">64</button>
@@ -1931,12 +2005,17 @@
     const BRANDFETCH_RASTER_FORMATS = new Set(['png', 'webp', 'jpg']);
     let currentSelfhstSlug = '';
     let currentSelfhstVariant = 'color';
+    let currentSelfhstFormat = 'png';
+    let currentSelfhstSize = 128;
     let selfhstProbeSeq = 0;
     let currentDashboardIconsSlug = '';
     let currentDashboardIconsVariant = 'color';
+    let currentDashboardIconsFormat = 'png';
+    let currentDashboardIconsSize = 128;
     let dashboardIconsProbeSeq = 0;
     let currentLobehubSlug = '';
     let currentLobehubVariant = 'color';
+    let currentLobehubFormat = 'png';
     let lobehubProbeSeq = 0;
     let currentLobehubSize = 128;
     let currentSvglSlug = '';
@@ -2042,6 +2121,18 @@
           return proxyUrl;
         }
       }
+      const mExt = path.match(/^(\/[^/]+)\/(\d+)\/(png|svg|jpg|jpeg|webp)(\/.*)$/);
+      if (mExt) {
+        const requested = parseInt(mExt[2], 10);
+        if (!Number.isFinite(requested) || native > requested) return proxyUrl;
+
+        const effective = standards.find((s) => s >= native);
+        if (effective == null || effective >= requested) return proxyUrl;
+
+        const newPath = `${mExt[1]}/${effective}/${mExt[3]}${mExt[4]}`;
+        return origin ? `${origin}${newPath}` : newPath;
+      }
+
       const m = path.match(/^(\/[^/]+)\/(\d+)(\/.*)$/);
       if (!m) return proxyUrl;
 
@@ -2146,10 +2237,15 @@
       resetBrandfetchFormatControls();
       currentSelfhstSlug = '';
       currentSelfhstVariant = 'color';
+      currentSelfhstFormat = 'png';
+      currentSelfhstSize = 128;
       currentDashboardIconsSlug = '';
       currentDashboardIconsVariant = 'color';
+      currentDashboardIconsFormat = 'png';
+      currentDashboardIconsSize = 128;
       currentLobehubSlug = '';
       currentLobehubVariant = 'color';
+      currentLobehubFormat = 'png';
       currentLobehubSize = 128;
       currentSvglSlug = '';
       currentSvglVariant = 'color';
@@ -2189,11 +2285,16 @@
       setActiveSize('faviconkit-sizes', 128);
       setActiveSize('faviconrun-sizes', 128);
       setActiveSize('brandfetch-sizes', 128);
+      setActiveSize('selfhst-sizes', 128);
+      setActiveSize('dashboardicons-sizes', 128);
       resetBrandfetchVariantButtons();
       resetBrandfetchFormatControls();
       resetSelfhstVariantButtons();
+      resetSelfhstFormatControls();
       resetDashboardIconsVariantButtons();
+      resetDashboardIconsFormatControls();
       resetLobehubVariantButtons();
+      resetLobehubFormatControls();
       updateResetButton();
     }
 
@@ -2293,9 +2394,34 @@
       }
     }
 
-    function serviceProxyPath(provider, slug, variant) {
-      const base = `${SERVICE_PROXY_PREFIX[provider]}/128/${slug}`;
-      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    function serviceProxyPath(provider, slug, variant, format = 'png') {
+      return buildCatalogProxyPath(provider, slug, { variant, format, size: 128 });
+    }
+
+    function domainProxyPath(provider, domain, size, ext = 'png') {
+      return `/${provider}/${size}/${ext}/${encodeURIComponent(domain)}`;
+    }
+
+    function buildCatalogProxyPath(provider, slug, { variant = 'color', format = 'png', size = 128 } = {}) {
+      const base = `${SERVICE_PROXY_PREFIX[provider]}/${size}/${format}/${encodeURIComponent(slug)}`;
+      if (variant === 'color') return base;
+      return `${base}?variant=${variant}`;
+    }
+
+    function setActiveFormat(groupId, format) {
+      document.querySelectorAll(`#${groupId} .size-btn`).forEach((btn) => {
+        if (btn.dataset.format) btn.classList.toggle('active', btn.dataset.format === format);
+      });
+    }
+
+    function updateCatalogFormatControls(provider, format) {
+      const sizesEl = document.getElementById(`${provider}-sizes`);
+      if (sizesEl) sizesEl.style.display = format === 'png' ? '' : 'none';
+    }
+
+    function resetCatalogFormatControls(provider) {
+      setActiveFormat(`${provider}-format`, 'png');
+      updateCatalogFormatControls(provider, 'png');
     }
 
     function probeServiceIcon(provider, slug) {
@@ -2442,8 +2568,12 @@
       if (providerHasMatches(selfhstData)) {
         currentSelfhstSlug = selfhstData.resolved || searchQuery;
         currentSelfhstVariant = 'color';
+        currentSelfhstFormat = 'png';
+        currentSelfhstSize = 128;
         resetSelfhstVariantButtons();
+        resetSelfhstFormatControls();
         setActiveVariant('selfhst-variants', 'color');
+        setActiveSize('selfhst-sizes', 128);
         loadSelfhst(searchQuery, 'color', { hideOnError, activeSlug: currentSelfhstSlug });
         probeAndShowSelfhstVariants(currentSelfhstSlug);
         renderServiceCandidates('selfhst', selfhstData.candidates, currentSelfhstSlug);
@@ -2454,8 +2584,12 @@
       if (providerHasMatches(dashboardData)) {
         currentDashboardIconsSlug = dashboardData.resolved || searchQuery;
         currentDashboardIconsVariant = 'color';
+        currentDashboardIconsFormat = 'png';
+        currentDashboardIconsSize = 128;
         resetDashboardIconsVariantButtons();
+        resetDashboardIconsFormatControls();
         setActiveVariant('dashboardicons-variants', 'color');
+        setActiveSize('dashboardicons-sizes', 128);
         loadDashboardIcons(searchQuery, 'color', { hideOnError, activeSlug: currentDashboardIconsSlug });
         probeAndShowDashboardIconsVariants(currentDashboardIconsSlug);
         renderServiceCandidates('dashboardicons', dashboardData.candidates, currentDashboardIconsSlug);
@@ -2466,8 +2600,10 @@
       if (providerHasMatches(lobehubData)) {
         currentLobehubSlug = lobehubData.resolved || searchQuery;
         currentLobehubVariant = 'color';
+        currentLobehubFormat = 'png';
         currentLobehubSize = 128;
         resetLobehubVariantButtons();
+        resetLobehubFormatControls();
         setActiveVariant('lobehub-variants', 'color');
         setActiveSize('lobehub-sizes', 128);
         loadLobehub(searchQuery, 'color', { hideOnError, activeSlug: currentLobehubSlug });
@@ -2592,11 +2728,11 @@
 
       loadScraperFavicon(domain);
       initSizedCard('google', domain);
-      loadDavicon('ddg', `/duckduckgo/64/${domain}`, `https://icons.duckduckgo.com/ip3/${domain}.ico`);
-      loadFavicon('yandex', `/yandex/64/${domain}`, `https://favicon.yandex.net/favicon/${domain}`);
-      loadFavicon('faviconso', `/faviconso/64/${domain}`, `https://favicon.so/api/favicon?url=${domain}`);
-      loadFavicon('vemetric', `/vemetric/128/${domain}`, `https://favicon.vemetric.com/${domain}`);
-      loadFavicon('favicondev', `/favicondev/64/${domain}`, `https://www.faviconextractor.com/favicon/${domain}`);
+      loadDavicon('ddg', domainProxyPath('duckduckgo', domain, 64), `https://icons.duckduckgo.com/ip3/${domain}.ico`);
+      loadFavicon('yandex', domainProxyPath('yandex', domain, 64), `https://favicon.yandex.net/favicon/${domain}`);
+      loadFavicon('faviconso', domainProxyPath('faviconso', domain, 64), `https://favicon.so/api/favicon?url=${domain}`);
+      loadFavicon('vemetric', domainProxyPath('vemetric', domain, 128), `https://favicon.vemetric.com/${domain}`);
+      loadFavicon('favicondev', domainProxyPath('favicondev', domain, 64), `https://www.faviconextractor.com/favicon/${domain}`);
       initSizedCard('faviconkit', domain);
       initSizedCard('faviconrun', domain);
 
@@ -2663,18 +2799,18 @@
       // the smaller sizes come from the classic s2/favicons (v1) service.
       if (size === 256 || size === 180) {
         const src = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=${size}`;
-        loadFavicon('google', `/googlev2/${size}/${domain}`, src);
+        loadFavicon('google', domainProxyPath('googlev2', domain, size), src);
       } else {
-        loadFavicon('google', `/google/${size}/${domain}`, `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`);
+        loadFavicon('google', domainProxyPath('google', domain, size), `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`);
       }
     }
 
     function loadFaviconkit(domain, size) {
-      loadFavicon('faviconkit', `/faviconkit/${size}/${domain}`, `https://ico.faviconkit.net/favicon/${domain}?sz=${size}`);
+      loadFavicon('faviconkit', domainProxyPath('faviconkit', domain, size), `https://ico.faviconkit.net/favicon/${domain}?sz=${size}`);
     }
 
     function loadFaviconrun(domain, size) {
-      loadFavicon('faviconrun', `/faviconrun/${size}/${domain}`, `https://favicon.run/favicon?domain=${domain}&sz=${size}`);
+      loadFavicon('faviconrun', domainProxyPath('faviconrun', domain, size), `https://favicon.run/favicon?domain=${domain}&sz=${size}`);
     }
 
     function buildBrandfetchUrl(domain, options = {}) {
@@ -2834,7 +2970,7 @@
         group: 'google-sizes',
         sizes: [256, 180, 128, 64, 32, 16],
         preferred: 128,
-        probePath: (d) => `/googlev2/256/${d}`,
+        probePath: (d) => domainProxyPath('googlev2', d, 256),
         setCurrent: (s) => { currentGoogleSize = s; },
         load: (d, s) => loadGoogle(d, s),
       },
@@ -2842,7 +2978,7 @@
         group: 'faviconkit-sizes',
         sizes: [256, 128, 64, 32, 16],
         preferred: 128,
-        probePath: (d) => `/faviconkit/256/${d}`,
+        probePath: (d) => domainProxyPath('faviconkit', d, 256),
         setCurrent: (s) => { currentFaviconkitSize = s; },
         load: (d, s) => loadFaviconkit(d, s),
       },
@@ -2850,7 +2986,7 @@
         group: 'faviconrun-sizes',
         sizes: [256, 128, 64, 32, 16],
         preferred: 128,
-        probePath: (d) => `/faviconrun/256/${d}`,
+        probePath: (d) => domainProxyPath('faviconrun', d, 256),
         setCurrent: (s) => { currentFaviconrunSize = s; },
         load: (d, s) => loadFaviconrun(d, s),
       },
@@ -2916,9 +3052,8 @@
       cfg.load(domain, target);
     }
 
-    function selfhstProxyPath(slug, variant) {
-      const base = `/selfhst/128/${slug}`;
-      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    function selfhstProxyPath(slug, variant, format = currentSelfhstFormat, size = currentSelfhstSize) {
+      return buildCatalogProxyPath('selfhst', slug, { variant, format, size });
     }
 
     function pngVariantSuffix(variant) {
@@ -2927,7 +3062,10 @@
       return '';
     }
 
-    function selfhstSourceUrl(slug, variant) {
+    function selfhstSourceUrl(slug, variant, format = currentSelfhstFormat) {
+      if (format === 'svg') {
+        return `https://cdn.jsdelivr.net/gh/selfhst/icons/svg/${slug}.svg`;
+      }
       const suffix = pngVariantSuffix(variant);
       return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${slug}${suffix}.png`;
     }
@@ -2935,8 +3073,10 @@
     function loadSelfhst(slug, variant, opts) {
       const hideOnError = !!(opts && opts.hideOnError);
       const activeSlug = (opts && opts.activeSlug) || slug;
-      const proxyUrl = selfhstProxyPath(activeSlug, variant);
-      const sourceUrl = selfhstSourceUrl(activeSlug, variant);
+      const format = (opts && opts.format) || currentSelfhstFormat;
+      const size = (opts && opts.size) || currentSelfhstSize;
+      const proxyUrl = selfhstProxyPath(activeSlug, variant, format, size);
+      const sourceUrl = selfhstSourceUrl(activeSlug, variant, format);
 
       const img = document.getElementById('selfhst-img');
       const spinner = document.getElementById('selfhst-spinner');
@@ -2959,7 +3099,12 @@
       const imgEl = new Image();
       imgEl.crossOrigin = 'anonymous';
       imgEl.onload = () => {
-        if (currentSelfhstSlug !== activeSlug || currentSelfhstVariant !== variant) return;
+        if (
+          currentSelfhstSlug !== activeSlug
+          || currentSelfhstVariant !== variant
+          || currentSelfhstFormat !== format
+          || (format === 'png' && currentSelfhstSize !== size)
+        ) return;
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
@@ -2968,11 +3113,17 @@
           h: imgEl.naturalHeight,
           proxyUrl,
           sourceUrl,
+          hideDimensions: format === 'svg',
         });
         updateServiceIconsDivider();
       };
       imgEl.onerror = () => {
-        if (currentSelfhstSlug !== activeSlug || currentSelfhstVariant !== variant) return;
+        if (
+          currentSelfhstSlug !== activeSlug
+          || currentSelfhstVariant !== variant
+          || currentSelfhstFormat !== format
+          || (format === 'png' && currentSelfhstSize !== size)
+        ) return;
         spinner.style.display = 'none';
         img.removeAttribute('src');
         img.style.display = 'none';
@@ -2990,9 +3141,37 @@
 
     function switchSelfhstVariant(variant) {
       if (!currentSelfhstSlug) return;
+      if (variant !== 'color' && currentSelfhstFormat === 'svg') {
+        currentSelfhstFormat = 'png';
+        setActiveFormat('selfhst-format', 'png');
+        updateCatalogFormatControls('selfhst', 'png');
+      }
       currentSelfhstVariant = variant;
       setActiveVariant('selfhst-variants', variant);
       loadSelfhst(currentSelfhstSlug, variant, { hideOnError: variant === 'color' });
+    }
+
+    function switchSelfhstFormat(format) {
+      if (!currentSelfhstSlug) return;
+      if (format === 'svg' && currentSelfhstVariant !== 'color') {
+        currentSelfhstVariant = 'color';
+        setActiveVariant('selfhst-variants', 'color');
+      }
+      currentSelfhstFormat = format;
+      setActiveFormat('selfhst-format', format);
+      updateCatalogFormatControls('selfhst', format);
+      loadSelfhst(currentSelfhstSlug, currentSelfhstVariant, { hideOnError: false });
+    }
+
+    function switchSelfhstSize(size) {
+      if (!currentSelfhstSlug || currentSelfhstFormat !== 'png') return;
+      currentSelfhstSize = size;
+      setActiveSize('selfhst-sizes', size);
+      loadSelfhst(currentSelfhstSlug, currentSelfhstVariant, { hideOnError: false, size });
+    }
+
+    function resetSelfhstFormatControls() {
+      resetCatalogFormatControls('selfhst');
     }
 
     function setActiveVariant(containerId, variant) {
@@ -3029,12 +3208,14 @@
       );
     }
 
-    function dashboardIconsProxyPath(slug, variant) {
-      const base = `/dashboardicons/128/${slug}`;
-      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    function dashboardIconsProxyPath(slug, variant, format = currentDashboardIconsFormat, size = currentDashboardIconsSize) {
+      return buildCatalogProxyPath('dashboardicons', slug, { variant, format, size });
     }
 
-    function dashboardIconsSourceUrl(slug, variant) {
+    function dashboardIconsSourceUrl(slug, variant, format = currentDashboardIconsFormat) {
+      if (format === 'svg') {
+        return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${slug}.svg`;
+      }
       const suffix = pngVariantSuffix(variant);
       return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/${slug}${suffix}.png`;
     }
@@ -3042,8 +3223,10 @@
     function loadDashboardIcons(slug, variant, opts) {
       const hideOnError = !!(opts && opts.hideOnError);
       const activeSlug = (opts && opts.activeSlug) || slug;
-      const proxyUrl = dashboardIconsProxyPath(slug, variant);
-      const sourceUrl = dashboardIconsSourceUrl(activeSlug, variant);
+      const format = (opts && opts.format) || currentDashboardIconsFormat;
+      const size = (opts && opts.size) || currentDashboardIconsSize;
+      const proxyUrl = dashboardIconsProxyPath(activeSlug, variant, format, size);
+      const sourceUrl = dashboardIconsSourceUrl(activeSlug, variant, format);
 
       const img = document.getElementById('dashboardicons-img');
       const spinner = document.getElementById('dashboardicons-spinner');
@@ -3066,7 +3249,12 @@
       const imgEl = new Image();
       imgEl.crossOrigin = 'anonymous';
       imgEl.onload = () => {
-        if (currentDashboardIconsSlug !== activeSlug || currentDashboardIconsVariant !== variant) return;
+        if (
+          currentDashboardIconsSlug !== activeSlug
+          || currentDashboardIconsVariant !== variant
+          || currentDashboardIconsFormat !== format
+          || (format === 'png' && currentDashboardIconsSize !== size)
+        ) return;
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
@@ -3075,11 +3263,17 @@
           h: imgEl.naturalHeight,
           proxyUrl,
           sourceUrl,
+          hideDimensions: format === 'svg',
         });
         updateServiceIconsDivider();
       };
       imgEl.onerror = () => {
-        if (currentDashboardIconsSlug !== activeSlug || currentDashboardIconsVariant !== variant) return;
+        if (
+          currentDashboardIconsSlug !== activeSlug
+          || currentDashboardIconsVariant !== variant
+          || currentDashboardIconsFormat !== format
+          || (format === 'png' && currentDashboardIconsSize !== size)
+        ) return;
         spinner.style.display = 'none';
         img.removeAttribute('src');
         img.style.display = 'none';
@@ -3097,9 +3291,37 @@
 
     function switchDashboardIconsVariant(variant) {
       if (!currentDashboardIconsSlug) return;
+      if (variant !== 'color' && currentDashboardIconsFormat === 'svg') {
+        currentDashboardIconsFormat = 'png';
+        setActiveFormat('dashboardicons-format', 'png');
+        updateCatalogFormatControls('dashboardicons', 'png');
+      }
       currentDashboardIconsVariant = variant;
       setActiveVariant('dashboardicons-variants', variant);
       loadDashboardIcons(currentDashboardIconsSlug, variant, { hideOnError: variant === 'color' });
+    }
+
+    function switchDashboardIconsFormat(format) {
+      if (!currentDashboardIconsSlug) return;
+      if (format === 'svg' && currentDashboardIconsVariant !== 'color') {
+        currentDashboardIconsVariant = 'color';
+        setActiveVariant('dashboardicons-variants', 'color');
+      }
+      currentDashboardIconsFormat = format;
+      setActiveFormat('dashboardicons-format', format);
+      updateCatalogFormatControls('dashboardicons', format);
+      loadDashboardIcons(currentDashboardIconsSlug, currentDashboardIconsVariant, { hideOnError: false });
+    }
+
+    function switchDashboardIconsSize(size) {
+      if (!currentDashboardIconsSlug || currentDashboardIconsFormat !== 'png') return;
+      currentDashboardIconsSize = size;
+      setActiveSize('dashboardicons-sizes', size);
+      loadDashboardIcons(currentDashboardIconsSlug, currentDashboardIconsVariant, { hideOnError: false, size });
+    }
+
+    function resetDashboardIconsFormatControls() {
+      resetCatalogFormatControls('dashboardicons');
     }
 
     function resetDashboardIconsVariantButtons() {
@@ -3130,22 +3352,21 @@
       );
     }
 
-    function lobehubProxyPath(slug, variant, size = currentLobehubSize) {
-      const base = `/lobehub/${size}/${slug}`;
-      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    function lobehubProxyPath(slug, variant, format = currentLobehubFormat, size = currentLobehubSize) {
+      return buildCatalogProxyPath('lobehub', slug, { variant, format, size });
     }
 
-    function lobehubSourceUrl(slug, variant) {
-      const base = `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${slug}`;
-      return `${base}.svg`;
+    function lobehubSourceUrl(slug) {
+      return `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${slug}.svg`;
     }
 
     function loadLobehub(slug, variant, opts) {
       const hideOnError = !!(opts && opts.hideOnError);
       const activeSlug = (opts && opts.activeSlug) || slug;
+      const format = (opts && opts.format) || currentLobehubFormat;
       const size = (opts && opts.size) || currentLobehubSize;
-      const proxyUrl = lobehubProxyPath(slug, variant, size);
-      const sourceUrl = lobehubSourceUrl(activeSlug, variant);
+      const proxyUrl = lobehubProxyPath(activeSlug, variant, format, size);
+      const sourceUrl = lobehubSourceUrl(activeSlug);
 
       const img = document.getElementById('lobehub-img');
       const spinner = document.getElementById('lobehub-spinner');
@@ -3168,7 +3389,12 @@
       const imgEl = new Image();
       imgEl.crossOrigin = 'anonymous';
       imgEl.onload = () => {
-        if (currentLobehubSlug !== activeSlug || currentLobehubVariant !== variant || currentLobehubSize !== size) return;
+        if (
+          currentLobehubSlug !== activeSlug
+          || currentLobehubVariant !== variant
+          || currentLobehubFormat !== format
+          || (format === 'png' && currentLobehubSize !== size)
+        ) return;
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
@@ -3177,11 +3403,17 @@
           h: imgEl.naturalHeight,
           proxyUrl,
           sourceUrl,
+          hideDimensions: format === 'svg',
         });
         updateServiceIconsDivider();
       };
       imgEl.onerror = () => {
-        if (currentLobehubSlug !== activeSlug || currentLobehubVariant !== variant || currentLobehubSize !== size) return;
+        if (
+          currentLobehubSlug !== activeSlug
+          || currentLobehubVariant !== variant
+          || currentLobehubFormat !== format
+          || (format === 'png' && currentLobehubSize !== size)
+        ) return;
         spinner.style.display = 'none';
         if (hideOnError || variant === 'color') {
           card.style.display = 'none';
@@ -3197,16 +3429,37 @@
 
     function switchLobehubVariant(variant) {
       if (!currentLobehubSlug) return;
+      if (variant !== 'color' && currentLobehubFormat === 'svg') {
+        currentLobehubFormat = 'png';
+        setActiveFormat('lobehub-format', 'png');
+        updateCatalogFormatControls('lobehub', 'png');
+      }
       currentLobehubVariant = variant;
       setActiveVariant('lobehub-variants', variant);
       loadLobehub(currentLobehubSlug, variant, { hideOnError: variant === 'color', size: currentLobehubSize });
     }
 
-    function switchLobehubSize(size) {
+    function switchLobehubFormat(format) {
       if (!currentLobehubSlug) return;
+      if (format === 'svg' && currentLobehubVariant !== 'color') {
+        currentLobehubVariant = 'color';
+        setActiveVariant('lobehub-variants', 'color');
+      }
+      currentLobehubFormat = format;
+      setActiveFormat('lobehub-format', format);
+      updateCatalogFormatControls('lobehub', format);
+      loadLobehub(currentLobehubSlug, currentLobehubVariant, { hideOnError: false, size: currentLobehubSize });
+    }
+
+    function switchLobehubSize(size) {
+      if (!currentLobehubSlug || currentLobehubFormat !== 'png') return;
       currentLobehubSize = size;
       setActiveSize('lobehub-sizes', size);
       loadLobehub(currentLobehubSlug, currentLobehubVariant, { hideOnError: false, size });
+    }
+
+    function resetLobehubFormatControls() {
+      resetCatalogFormatControls('lobehub');
     }
 
     function resetLobehubVariantButtons() {
@@ -3220,7 +3473,7 @@
         const img = new Image();
         img.onload = () => resolve(true);
         img.onerror = () => resolve(false);
-        img.src = `${lobehubSourceUrl(slug, variant)}?probe=${Date.now()}`;
+        img.src = `${lobehubProxyPath(slug, variant, 'png', 128)}?probe=${Date.now()}`;
       });
     }
 
@@ -3237,9 +3490,8 @@
       );
     }
 
-    function svglProxyPath(slug, variant, size = currentSvglSize) {
-      const base = `/svgl/${size}/${slug}`;
-      return variant === 'color' ? base : `${base}?variant=${variant}`;
+    function svglProxyPath(slug, variant, size = currentSvglSize, format = 'png') {
+      return buildCatalogProxyPath('svgl', slug, { variant, format, size });
     }
 
     async function fetchSvglCatalog(slug) {
@@ -3630,7 +3882,7 @@
             'size-btn' +
             (currentScraperSelection === `proxySize-${size}` ? ' active' : '');
           btn.textContent = String(size);
-          btn.title = `${location.origin}/scraper/${size}/${currentDomain}  \u2022  ${size}\u00d7${size}`;
+          btn.title = `${location.origin}${domainProxyPath('scraper', currentDomain, size)}  \u2022  ${size}\u00d7${size}`;
           btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -3653,7 +3905,7 @@
         const h = icon.height || w;
         btn.textContent = w === h ? String(w) : `${w}\u00d7${h}`;
         const titleParts = [
-          icon.proxy || `${location.origin}/scraper/${w || 128}/${currentDomain}`,
+          icon.proxy || `${location.origin}${domainProxyPath('scraper', currentDomain, w || 128)}`,
           w && h ? `${w}\u00d7${h}` : null,
           icon.format ? icon.format.toUpperCase() : null,
           formatBytes(icon.bytes) || null,
@@ -3737,8 +3989,8 @@
 
       const token = ++scraperLoadToken;
       const size = icon.width || 128;
-      const proxyUrl = `/scraper/${size}/${currentDomain}`;
-      const displayProxyUrl = icon.proxy || `${location.origin}/scraper/${size}/${currentDomain}`;
+      const proxyUrl = `/scraper/${size}/png/${currentDomain}`;
+      const displayProxyUrl = icon.proxy || `${location.origin}${domainProxyPath('scraper', currentDomain, size)}`;
 
       const img = document.getElementById('scraper-img');
       const spinner = document.getElementById('scraper-spinner');
@@ -3783,8 +4035,8 @@
     function loadScraperProxySize(size) {
       if (!currentDomain) return;
       const token = ++scraperLoadToken;
-      const embedUrl = `${location.origin}/scraper/${size}/${currentDomain}`;
-      const proxyUrl = `/scraper/${size}/${currentDomain}`;
+      const embedUrl = `${location.origin}${domainProxyPath('scraper', currentDomain, size)}`;
+      const proxyUrl = domainProxyPath('scraper', currentDomain, size);
       const sizeSource = scraperAvailableSizes[String(size)]?.source || scraperJsonSource || null;
 
       const img = document.getElementById('scraper-img');

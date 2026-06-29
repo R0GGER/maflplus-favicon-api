@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const cheerio = require('cheerio');
 const sharp = require('sharp');
-const { rasterizeSvgToSize, readImageDimensions, toDisplayPng, looksLikeSvg, isBlankFavicon, MIN_SOURCE_SIZE } = require('./imageNormalize');
+const { rasterizeSvgToSize, readImageDimensions, toDisplayPng, looksLikeSvg, isBlankFavicon, MIN_SOURCE_SIZE, resizeIcon } = require('./imageNormalize');
 const { LRUCache } = require('lru-cache');
 const { upstreamFetch, ipv4Dispatcher, ipv4Http1Dispatcher } = require('./upstreamFetch');
 const scraperDiskCache = require('./scraperDiskCache');
@@ -480,21 +480,25 @@ const PROVIDERS = {
     parts.push(`/${type}.${format}`);
     return `${parts.join('')}?c=${encodeURIComponent(clientId || '')}`;
   },
-  selfhst: (service, variant = 'color') => {
+  selfhst: (service, variant = 'color', format = 'png') => {
+    if (format === 'svg') {
+      return `https://cdn.jsdelivr.net/gh/selfhst/icons/svg/${encodeURIComponent(service)}.svg`;
+    }
     const suffix = pngVariantSuffix(variant);
     return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${encodeURIComponent(service)}${suffix}.png`;
   },
-  dashboardIcons: (service, variant = 'color') => {
+  dashboardIcons: (service, variant = 'color', format = 'png') => {
+    if (format === 'svg') {
+      return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${encodeURIComponent(service)}.svg`;
+    }
     const suffix = pngVariantSuffix(variant);
     return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/${encodeURIComponent(service)}${suffix}.png`;
   },
-  lobehub: (service, variant = 'color') => {
+  lobehub: (service) => {
     const slug = encodeURIComponent(service);
-    const base = `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${slug}`;
-    if (variant === 'light' || variant === 'dark') return `${base}.svg`;
-    return `${base}.svg`;
+    return `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${slug}.svg`;
   },
-  svgl: (service, variant = 'color') => {
+  svgl: (service, variant = 'color', format = 'png') => {
     const entry = getSvglEntrySync(service);
     if (!entry) return '';
     const route = svglRouteForVariant(entry, variant);
@@ -776,77 +780,80 @@ async function fetchServiceIcon(buildUrl, getCandidates, service, variant, provi
   return null;
 }
 
-async function fetchSelfhst(service, variant = 'color', { strict = false } = {}) {
+async function fetchSelfhstPng(slug, variant) {
+  const suffix = pngVariantSuffix(variant);
+  const url = PROVIDERS.selfhst(slug, variant, 'png');
+  const result = await fetchFavicon(url);
+  return result ? { ...result, provider: 'selfhst', service: slug, variant } : null;
+}
+
+async function fetchSelfhst(service, variant = 'color', { strict = false, format = 'png' } = {}) {
+  const wantSvg = format === 'svg';
   const { entries } = await ensureSelfhstIndex();
   const entryBySlug = new Map(entries.map((entry) => [entry.slug, entry]));
+
+  if (wantSvg) {
+    if (variant !== 'color') return null;
+    const candidates = strict
+      ? [resolveSelfhstSlugSync(service) || normalizeServiceAliasKey(service)].filter(Boolean)
+      : await getSelfhstSlugCandidates(service, { strict });
+    for (const slug of candidates) {
+      if (!entryBySlug.get(slug)?.hasSvg) continue;
+      const url = PROVIDERS.selfhst(slug, 'color', 'svg');
+      const result = await fetchFavicon(url);
+      if (result) {
+        return { ...result, provider: 'selfhst', service: slug, variant: 'color', format: 'svg' };
+      }
+    }
+    return null;
+  }
 
   if (variant !== 'color') {
     const slug = resolveSelfhstSlugSync(service) || normalizeServiceAliasKey(service);
     if (!slug) return null;
-
-    const entry = entryBySlug.get(slug);
-    const suffix = pngVariantSuffix(variant);
-    const encoded = encodeURIComponent(slug);
-    const urls = [`https://cdn.jsdelivr.net/gh/selfhst/icons/png/${encoded}${suffix}.png`];
-
-    for (const url of urls) {
-      const result = await fetchFavicon(url);
-      if (!result) continue;
-      return { ...result, provider: 'selfhst', service: slug, variant };
-    }
-    return null;
+    return fetchSelfhstPng(slug, variant);
   }
 
   const candidates = await getSelfhstSlugCandidates(service, { strict });
   const variants = ['color', 'light', 'dark'];
 
   for (const slug of candidates) {
-    const entry = entryBySlug.get(slug);
     for (const v of variants) {
-      const suffix = pngVariantSuffix(v);
-      const encoded = encodeURIComponent(slug);
-      const urls = [];
-
-      if (entry?.hasSvg && v === 'color') {
-        urls.push(`https://cdn.jsdelivr.net/gh/selfhst/icons/svg/${encoded}.svg`);
-      }
-      urls.push(`https://cdn.jsdelivr.net/gh/selfhst/icons/png/${encoded}${suffix}.png`);
-
-      for (const url of urls) {
-        const result = await fetchFavicon(url);
-        if (!result) continue;
-
-        const isSvg = url.endsWith('.svg') || (result.contentType || '').toLowerCase().includes('svg');
-        if (isSvg) {
-          const buffer = await rasterizeSvgToSize(result.buffer, 128);
-          return {
-            buffer,
-            contentType: 'image/png',
-            url: result.url,
-            provider: 'selfhst',
-            service: slug,
-            variant: v,
-          };
-        }
-
-        return { ...result, provider: 'selfhst', service: slug, variant: v };
-      }
+      const result = await fetchSelfhstPng(slug, v);
+      if (result) return result;
     }
   }
   return null;
 }
 
-async function fetchDashboardIcons(service, variant = 'color', { strict = false } = {}) {
+async function fetchDashboardIcons(service, variant = 'color', { strict = false, format = 'png' } = {}) {
+  const wantSvg = format === 'svg';
+
+  if (wantSvg) {
+    if (variant !== 'color') return null;
+    const candidates = strict
+      ? [await resolveServiceSlug(service)].filter(Boolean)
+      : await getDashboardIconsSlugCandidates(service, { strict });
+    for (const slug of candidates) {
+      const url = PROVIDERS.dashboardIcons(slug, 'color', 'svg');
+      const result = await fetchFavicon(url);
+      if (result) {
+        return { ...result, provider: 'dashboardicons', service: slug, variant: 'color', format: 'svg' };
+      }
+    }
+    return null;
+  }
+
   if (variant !== 'color') {
     const slug = await resolveServiceSlug(service);
-    const result = await fetchFavicon(PROVIDERS.dashboardIcons(slug, variant));
+    const result = await fetchFavicon(PROVIDERS.dashboardIcons(slug, variant, 'png'));
     return result
       ? { ...result, provider: 'dashboardicons', service: slug, variant }
       : null;
   }
 
   return fetchServiceIcon(
-    PROVIDERS.dashboardIcons,
+    (slug, v) => PROVIDERS.dashboardIcons(slug, v, 'png'),
     (s) => getDashboardIconsSlugCandidates(s, { strict }),
     service,
     variant,
@@ -854,12 +861,49 @@ async function fetchDashboardIcons(service, variant = 'color', { strict = false 
   );
 }
 
-function lobehubUrlsForSlug(slug, variant, entry) {
-  const base = `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${encodeURIComponent(slug)}`;
+const LOBEHUB_THEME_PNG_CDN =
+  'https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@latest';
 
-  if (variant === 'light' || variant === 'dark') {
-    return [`${base}.svg`];
+function lobehubThemePngUrls(slug, theme) {
+  const enc = encodeURIComponent(slug);
+  return [
+    `${LOBEHUB_THEME_PNG_CDN}/${theme}/${enc}.png`,
+    `${LOBEHUB_THEME_PNG_CDN}/${theme}/${enc}-color.png`,
+  ];
+}
+
+async function lobehubThemePngAvailable(slug, theme) {
+  for (const url of lobehubThemePngUrls(slug, theme)) {
+    const result = await fetchFavicon(url);
+    if (result) return true;
   }
+  return false;
+}
+
+async function fetchLobehubThemePng(slug, theme, size) {
+  for (const url of lobehubThemePngUrls(slug, theme)) {
+    const result = await fetchFavicon(url);
+    if (!result) continue;
+    try {
+      const buffer = await resizeIcon(result.buffer, size);
+      return {
+        buffer,
+        contentType: 'image/png',
+        url: result.url,
+        provider: 'lobehub',
+        service: slug,
+        variant: theme,
+        size,
+      };
+    } catch {
+      return { ...result, provider: 'lobehub', service: slug, variant: theme, size };
+    }
+  }
+  return null;
+}
+
+function lobehubUrlsForSlug(slug, _variant, entry) {
+  const base = `https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/${encodeURIComponent(slug)}`;
 
   const urls = [];
   if (entry?.hasColor) urls.push(`${base}-color.svg`);
@@ -869,65 +913,58 @@ function lobehubUrlsForSlug(slug, variant, entry) {
   return urls;
 }
 
-async function recolorLobehubPng(png, tone) {
-  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const rgb = tone === 'light' ? 0 : 255;
-  for (let i = 0; i < data.length; i += info.channels) {
-    if (data[i + 3] > 0) {
-      data[i] = rgb;
-      data[i + 1] = rgb;
-      data[i + 2] = rgb;
-    }
-  }
-  return sharp(data, {
-    raw: { width: info.width, height: info.height, channels: info.channels },
-  })
-    .png()
-    .toBuffer();
-}
+async function fetchLobehub(service, variant = 'color', size = 128, { strict = false, format = 'png' } = {}) {
+  const wantSvg = format === 'svg';
+  if (wantSvg && (variant === 'light' || variant === 'dark')) return null;
 
-async function rasterizeLobehubSvg(buffer, size, variant) {
-  const png = await rasterizeSvgToSize(buffer, size);
-  if (variant === 'light') return recolorLobehubPng(png, 'light');
-  if (variant === 'dark') return recolorLobehubPng(png, 'dark');
-  return png;
-}
-
-async function fetchLobehub(service, variant = 'color', size = 128, { strict = false } = {}) {
   const index = await ensureLobehubIndex();
   const candidates = await getLobehubSlugCandidates(service, { strict });
-  const variants = [variant];
 
   for (const slug of candidates) {
     const entry = index.entries.get(slug);
-    for (const v of variants) {
-      for (const url of lobehubUrlsForSlug(slug, v, entry)) {
-        const result = await fetchFavicon(url);
-        if (!result) continue;
 
-        const contentType = (result.contentType || '').toLowerCase();
-        const isSvg = contentType.includes('svg') || url.toLowerCase().endsWith('.svg');
-        if (isSvg) {
-          const buffer = await rasterizeLobehubSvg(result.buffer, size, v);
-          return {
-            buffer,
-            contentType: 'image/png',
-            url: result.url,
-            provider: 'lobehub',
-            service: slug,
-            variant: v,
-            size,
-          };
-        }
+    if (variant === 'light' || variant === 'dark') {
+      const themed = await fetchLobehubThemePng(slug, variant, size);
+      if (themed) return themed;
+      continue;
+    }
 
-        return { ...result, provider: 'lobehub', service: slug, variant: v, size };
+    for (const url of lobehubUrlsForSlug(slug, 'color', entry)) {
+      const result = await fetchFavicon(url);
+      if (!result) continue;
+
+      const contentType = (result.contentType || '').toLowerCase();
+      const isSvg = contentType.includes('svg') || url.toLowerCase().endsWith('.svg');
+      if (isSvg && wantSvg) {
+        return {
+          ...result,
+          provider: 'lobehub',
+          service: slug,
+          variant: 'color',
+          format: 'svg',
+        };
       }
+      if (isSvg) {
+        const buffer = await rasterizeSvgToSize(result.buffer, size);
+        return {
+          buffer,
+          contentType: 'image/png',
+          url: result.url,
+          provider: 'lobehub',
+          service: slug,
+          variant: 'color',
+          size,
+        };
+      }
+
+      return { ...result, provider: 'lobehub', service: slug, variant: 'color', size };
     }
   }
   return null;
 }
 
-async function fetchSvgl(service, variant = 'color', size = 128, { strict = false } = {}) {
+async function fetchSvgl(service, variant = 'color', size = 128, { strict = false, format = 'png' } = {}) {
+  const wantSvg = format === 'svg';
   const candidates = await getSvglSlugCandidates(service, { strict });
   const variants = [variant];
 
@@ -943,6 +980,15 @@ async function fetchSvgl(service, variant = 'color', size = 128, { strict = fals
 
       const contentType = (result.contentType || '').toLowerCase();
       const isSvg = contentType.includes('svg') || url.toLowerCase().endsWith('.svg');
+      if (isSvg && wantSvg) {
+        return {
+          ...result,
+          provider: 'svgl',
+          service: slug,
+          variant: v,
+          format: 'svg',
+        };
+      }
       if (isSvg) {
         const buffer = await rasterizeSvgToSize(result.buffer, size);
         return {
@@ -1853,6 +1899,42 @@ async function getDashboardIconsVariantAvailability(slug) {
   );
 }
 
+async function getLobehubVariantAvailability(slug) {
+  if (!slug) return null;
+
+  const cacheKey = `lobehub:${slug}`;
+  const cached = readVariantAvailabilityCache(cacheKey);
+  if (cached !== null) return cached;
+
+  const index = await ensureLobehubIndex();
+  const entry = index.entries?.get(slug);
+  if (!entry) {
+    writeVariantAvailabilityCache(cacheKey, null);
+    return null;
+  }
+
+  let color = false;
+  for (const url of lobehubUrlsForSlug(slug, 'color', entry)) {
+    if (await fetchFavicon(url)) {
+      color = true;
+      break;
+    }
+  }
+  if (!color) {
+    writeVariantAvailabilityCache(cacheKey, null);
+    return null;
+  }
+
+  const [light, dark] = await Promise.all([
+    lobehubThemePngAvailable(slug, 'light'),
+    lobehubThemePngAvailable(slug, 'dark'),
+  ]);
+
+  const value = { color: true, light, dark };
+  writeVariantAvailabilityCache(cacheKey, value);
+  return value;
+}
+
 module.exports = {
   fetchGoogle,
   fetchGoogleV2,
@@ -1889,5 +1971,6 @@ module.exports = {
   PROVIDERS,
   getSelfhstVariantAvailability,
   getDashboardIconsVariantAvailability,
+  getLobehubVariantAvailability,
   invalidateScraperDomainCaches,
 };

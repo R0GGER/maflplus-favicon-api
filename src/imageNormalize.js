@@ -81,16 +81,56 @@ function pickLargestIcoFrame(frames) {
   return best;
 }
 
+function bgraToRgba(buffer, width, height) {
+  const pixels = width * height;
+  const rgba = Buffer.alloc(pixels * 4);
+  for (let i = 0; i < pixels; i++) {
+    const src = i * 4;
+    rgba[src] = buffer[src + 2];
+    rgba[src + 1] = buffer[src + 1];
+    rgba[src + 2] = buffer[src];
+    rgba[src + 3] = buffer[src + 3];
+  }
+  return rgba;
+}
+
 async function icoFrameToPng(frame) {
   let input;
   if (frame.type === 'png') {
     input = sharp(Buffer.from(frame.data));
   } else {
-    input = sharp(Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), {
+    const bgra = Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength);
+    const rgba = bgraToRgba(bgra, frame.width, frame.height);
+    input = sharp(rgba, {
       raw: { width: frame.width, height: frame.height, channels: 4 },
     });
   }
   return input.png().toBuffer();
+}
+
+function entryLooksLikeIco(entry) {
+  if (!entry?.buffer?.length) return false;
+  const hint = `${entry.contentType || ''} ${entry.url || ''}`.toLowerCase();
+  return looksLikeIco(entry.buffer) || hint.includes('ico') || hint.includes('x-icon');
+}
+
+// Decode ICO / x-icon (and SVG) to PNG bytes for browser <img> tags and /…/png/… routes.
+async function normalizeEntryForPng(entry) {
+  if (!entry?.buffer?.length) return entry;
+
+  const contentType = (entry.contentType || '').toLowerCase();
+  const isSvg = contentType.includes('svg') || looksLikeSvg(entry.buffer);
+  if (!isSvg && !entryLooksLikeIco(entry)) return entry;
+
+  const displayed = await toDisplayPng(entry.buffer, {
+    contentType: entry.contentType,
+    url: entry.url,
+  });
+  return {
+    ...entry,
+    buffer: displayed.buffer,
+    contentType: 'image/png',
+  };
 }
 
 // Sharp cannot read many ICO files (BMP frames). Use decode-ico as fallback.
@@ -137,7 +177,8 @@ async function toDisplayPng(buffer, { contentType = '', url = '' } = {}) {
 
   const hint = `${contentType} ${url}`.toLowerCase();
   const isSvg = looksLikeSvg(buffer) || hint.includes('svg');
-  const isIco = !isSvg && (looksLikeIco(buffer) || hint.includes('ico'));
+  const isIco =
+    !isSvg && (looksLikeIco(buffer) || hint.includes('ico') || hint.includes('x-icon'));
 
   if (isSvg) {
     const png = await rasterizeSvgToSize(buffer, SVG_DISPLAY_SIZE);
@@ -180,7 +221,9 @@ async function rasterizeIco(buffer) {
   if (frame.type === 'png') {
     input = sharp(Buffer.from(frame.data));
   } else {
-    input = sharp(Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), {
+    const bgra = Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength);
+    const rgba = bgraToRgba(bgra, frame.width, frame.height);
+    input = sharp(rgba, {
       raw: { width: frame.width, height: frame.height, channels: 4 },
     });
   }
@@ -283,6 +326,8 @@ module.exports = {
   toPng256,
   toPng,
   toDisplayPng,
+  normalizeEntryForPng,
+  entryLooksLikeIco,
   readImageDimensions,
   resizeIcon,
   isBlankFavicon,
