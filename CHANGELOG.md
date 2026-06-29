@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.15] — 2026-06-28
+
+### Changed
+
+- **Web UI — no source/proxy toggle on tokenized providers** — removed the alternate URL link from the Brandfetch.io and logo.dev cards (upstream URLs embed API tokens).
+
 ## [2.5.14] — 2026-06-28
 
 ### Fixed
