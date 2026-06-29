@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.6] — 2026-06-29
+
+### Fixed
+
+- **Stale `best` cache on `/{domain}` for product subdomains** (e.g. `drive.google.com` kept serving a cached DuckDuckGo parent-brand favicon even after the scraper delegation fix) — `pickBest()` now discards cached `best` entries from generic providers when the host has an explicit `domainIconTags.js` mapping, so the next request re-runs the scraper catalog fallback without needing `?refresh=1`.
+
 ## [2.6.5] — 2026-06-29
 
 ### Fixed

@@ -91,6 +91,19 @@ function scoreCandidate(info) {
 
 const CATALOG_RACE_KEYS = ['selfhst', 'dashboardicons', 'lobehub', 'svgl'];
 
+const GENERIC_BEST_PICK_PROVIDERS = new Set([
+  'google', 'googlev2', 'duckduckgo', 'faviconkit', 'faviconrun',
+  'faviconso', 'vemetric', 'favicondev', 'yandex',
+]);
+
+function isAcceptableTaggedBestCache(entry) {
+  if (!entry?.provider) return false;
+  const provider = entry.provider;
+  if (provider === 'scraper' || provider.startsWith('scraper-fallback:')) return true;
+  if (CATALOG_RACE_KEYS.includes(provider)) return true;
+  return !GENERIC_BEST_PICK_PROVIDERS.has(provider);
+}
+
 function buildDomainRaceOrder(domain, all) {
   const baseOrder = [
     'scraper', 'googlev2', 'duckduckgo',
@@ -230,9 +243,16 @@ async function raceFetchers(fallbacks, cacheProvider, cacheKey, cacheSize) {
 }
 
 async function pickBest(domain, { refresh = false } = {}) {
+  const tagged = !!iconTagForDomain(domain);
+
   if (!refresh) {
     const cached = await cache.get('best', domain, 32);
-    if (cached) return cached;
+    if (cached) {
+      // Pre-fix best-pick entries (e.g. duckduckgo for drive.google.com) must
+      // not mask the scraper catalog fallback for explicit domainIconTags hosts.
+      if (!tagged || isAcceptableTaggedBestCache(cached)) return cached;
+      await cache.del('best', domain, 32);
+    }
   } else {
     await cache.del('best', domain, 32);
   }
