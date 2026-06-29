@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.4] — 2026-06-29
+
+### Fixed
+
+- **Wrong icon on `/{domain}` for product subdomains** (e.g. `drive.google.com` returned the generic Google “G” favicon from DuckDuckGo/Google while `/scraper/drive.google.com` correctly served the Google Drive icon from selfh.st) — the best-pick race let fast generic providers beat the slower scraper catalog fallback. Domains with an explicit mapping in `domainIconTags.js` now race only the scraper plus catalog providers (`selfhst`, `dashboardicons`, `lobehub`, `svgl`), skipping site-wide providers that resolve to the parent brand icon.
+
 ## [2.6.3] — 2026-06-29
 
 ### Fixed

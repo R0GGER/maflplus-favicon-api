@@ -17,6 +17,7 @@ const {
 } = require('./providers');
 const cache = require('./cache');
 const { isBlankFavicon } = require('./imageNormalize');
+const { iconTagForDomain } = require('./domainIconTags');
 const { serviceSlugFromDomain } = require('./serviceSlugFromDomain');
 
 const VALID_DEFAULT_PROVIDERS = new Set([
@@ -88,6 +89,20 @@ function scoreCandidate(info) {
   return score;
 }
 
+const CATALOG_RACE_KEYS = ['selfhst', 'dashboardicons', 'lobehub', 'svgl'];
+
+function buildDomainRaceOrder(domain, all) {
+  const baseOrder = [
+    'scraper', 'googlev2', 'duckduckgo',
+    'google', 'faviconkit', 'faviconrun', 'faviconso', 'vemetric', 'favicondev', 'yandex',
+  ];
+
+  if (!iconTagForDomain(domain)) return baseOrder;
+
+  const catalogs = CATALOG_RACE_KEYS.filter((k) => all[k]);
+  return ['scraper', ...catalogs];
+}
+
 function buildFallbackFetchers(domain) {
   const all = {
     scraper:    () => fetchWithCache('scraper', domain, null, () => fetchScraper(domain)),
@@ -129,10 +144,7 @@ function buildFallbackFetchers(domain) {
       );
   }
 
-  const defaultOrder = [
-    'scraper', 'googlev2', 'duckduckgo',
-    'google', 'faviconkit', 'faviconrun', 'faviconso', 'vemetric', 'favicondev', 'yandex',
-  ];
+  const defaultOrder = buildDomainRaceOrder(domain, all);
 
   if (DEFAULT_PROVIDER && all[DEFAULT_PROVIDER]) {
     const rest = defaultOrder.filter((k) => k !== DEFAULT_PROVIDER);
