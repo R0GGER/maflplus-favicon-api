@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] — 2026-06-30
+
+### Added
+
+- **Custom profile URLs** — users can build a shareable URL `/{id}/{domain-or-appname}` where `{id}` is a base64url string that *encodes* a preferred provider, up to four ordered fallbacks, and a minimum icon size (no database). On request the chain is tried in order: an **SVG** source satisfies any minimum and is served as-is; a **raster** source must be ≥ the minimum size and is then served as PNG at exactly that size; otherwise the next fallback is tried (transparent `404` when the chain fails). Minimum sizes: `16, 32, 64, 128`. Generate one via **Tools → Build custom URL** on the homepage (live URL, preview, and copy). New modules `src/customProfile.js` (encode/decode + validation) and `src/profileResolve.js` (chain resolver).
+
 ## [2.6.3] — 2026-06-29
 
 ### Fixed

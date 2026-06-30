@@ -25,6 +25,7 @@ FaviconAPI is a self-hosted favicon proxy with a browser-based UI that fetches w
   - [Favicon providers](#favicon-providers)
   - [Service-icon catalogs](#service-icon-catalogs)
   - [Sizes](#sizes)
+- [Custom profile URLs](#custom-profile-urls)
 - [API v1](#api-v1)
   - [Authentication](#authentication)
   - [Response](#response)
@@ -54,6 +55,7 @@ So I built it. FaviconAPI brings 10+ favicon providers and four service-icon cat
 3. **Caches responses** in memory (LRU) and on disk to reduce upstream load and improve latency.
 4. **Normalizes icons** for the v1 JSON API into 128×128 PNG files served from a CDN route.
 5. **Looks up service icons** from the [selfh.st icons](https://github.com/selfhst/icons), [homarr dashboard-icons](https://github.com/homarr-labs/dashboard-icons), [LobeHub icons](https://www.npmjs.com/package/@lobehub/icons-static-svg), and [SVGL](https://github.com/pheralb/svgl) catalogs by service name.
+6. **Generates custom profile URLs** that encode a preferred provider, fallbacks, and a minimum size directly in the path — no account or storage required (see [Custom profile URLs](#custom-profile-urls)).
 
 > Interactive API docs and a live playground are available at `/api` on a running instance.
 
@@ -202,6 +204,7 @@ Look up an icon by app/service name (e.g. `jellyfin`). All support `?variant=col
 | Endpoint                     | Description                                            |
 | ---------------------------- | ------------------------------------------------------ |
 | `/{domain}`                  | Best favicon (parallel provider race)                  |
+| `/{id}/{domain-or-appname}`  | Custom profile favicon — see [Custom profile URLs](#custom-profile-urls) |
 | `/{domain}/json`             | JSON list of all endpoint URLs for a domain            |
 | `/api/v1/favicon?url=`       | FaviconAPI-compatible JSON API — see [API v1](#api-v1) |
 | `/cdn/favicons/{domain}.png` | Public CDN route for cached API v1 PNGs                |
@@ -217,6 +220,37 @@ https://your-host/scraper/{domain}?refresh=1
 ```
 
 Forces a fresh scrape by clearing the cached scraper entry (memory and disk) before fetching again. Use when a site changed its favicon, after scraper fixes, or when debugging stale results. `?nocache=1` is an alias for `?refresh=1`.
+
+---
+
+## Custom profile URLs
+
+Build a shareable URL that pins your own **preferred provider**, an ordered list of up to **four fallbacks**, and a **minimum icon size** — without an account or any server-side storage:
+
+```
+https://your-host/{id}/{domain-or-appname}
+```
+
+The `{id}` is a URL-safe (base64url) string that *encodes* the whole configuration; there is no database. Generate one from **Tools → Build custom URL** on the homepage, then append any domain (`github.com`) or app name (`immich`).
+
+**How the icon is resolved**
+
+The chain `[preferred, ...fallbacks]` is tried in order and the first usable icon wins:
+
+- A provider that returns an **SVG** satisfies any minimum (vector) and is served as-is (`image/svg+xml`).
+- A provider that returns a **raster** icon must have a source whose smaller side is **≥** the minimum size; it is then served as PNG at **exactly** that size.
+- If a provider returns nothing usable or a raster below the minimum, the next fallback is tried. If the whole chain fails, a transparent placeholder is returned with `404`.
+
+**Encoding**
+
+The id is the base64url of a compact JSON array — keep this contract identical on both ends:
+
+```js
+// [version, preferredProvider, [fallbacks...], minSize]
+[1, "scraper", ["googlev2", "duckduckgo"], 128]
+```
+
+Providers are any from the [favicon providers](#favicon-providers) / [catalogs](#appservice-icon-catalogs) tables; minimum sizes are `16, 32, 64, 128`. `logodev`/`brandfetch` only resolve when their credentials are configured (otherwise that step is skipped). Domain-only providers (scraper, raster providers, brandfetch) are skipped for app-name targets.
 
 ---
 

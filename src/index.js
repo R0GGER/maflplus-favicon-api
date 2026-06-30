@@ -61,6 +61,8 @@ const cache = require('./cache');
 const apiRoutes = require('./apiRoutes');
 const apiStore = require('./apiStore');
 const { extractDomainFromInput } = require('./domainValidation');
+const { decodeProfile } = require('./customProfile');
+const { resolveProfileIcon } = require('./profileResolve');
 
 const { version: APP_VERSION } = require('../package.json');
 
@@ -1698,6 +1700,27 @@ app.get('/:domain/json', async (req, res) => {
       svgl,
     },
   });
+});
+
+// Custom profile favicon: /:id/:target where :id is a base64url-encoded profile
+// (preferred provider + fallbacks + min size; see src/customProfile.js). When
+// :id is not a valid profile, fall through so other routes / the 404 handler
+// take over. Registered after /:domain/json so the literal */json route wins.
+app.get('/:cfg/:target', async (req, res, next) => {
+  const profile = decodeProfile(req.params.cfg);
+  if (!profile) return next();
+
+  const parsed = parseDomainOrService(req.params.target);
+  if (!parsed) return res.status(400).json({ error: 'Invalid domain or service name.' });
+
+  try {
+    const entry = await resolveProfileIcon(parsed, profile, req.params.cfg);
+    if (entry.notFound) res.status(404);
+    sendFavicon(res, entry);
+  } catch (err) {
+    console.error('Profile resolve error:', err.message);
+    res.status(500).json({ error: 'Internal error.' });
+  }
 });
 
 // Direct / best-pick favicon: /:domain or /:service

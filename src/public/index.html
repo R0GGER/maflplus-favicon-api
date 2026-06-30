@@ -357,6 +357,93 @@
 
     .modal-copy-btn:hover { background: #7b3fa8; }
 
+    .profile-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .profile-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .profile-field label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #2d2a26;
+    }
+
+    .profile-field select,
+    .profile-field input[type="text"] {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.88rem;
+      color: #2d2a26;
+      background: #fff;
+      border: 1px solid #e0dbd5;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+
+    .profile-field select:focus,
+    .profile-field input[type="text"]:focus {
+      outline: none;
+      border-color: #5b2e7e;
+    }
+
+    .profile-fallbacks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .profile-hint {
+      font-size: 0.78rem;
+      color: #8a8480;
+      font-style: italic;
+    }
+
+    .profile-preview {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-top: 0.25rem;
+      padding: 0.75rem;
+      background: #faf8f5;
+      border: 1px solid #ece6de;
+      border-radius: 8px;
+    }
+
+    .profile-preview-thumb {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #ece6de;
+    }
+
+    .profile-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+
+    .profile-preview .profile-preview-meta {
+      font-size: 0.8rem;
+      color: #6b6560;
+      word-break: break-all;
+    }
+
     .browser-guide {
       display: flex;
       flex-direction: column;
@@ -1899,6 +1986,17 @@
             FaviconAPI Copy
           </a>
         </div>
+
+        <div class="tool-card">
+          <div>
+            <strong><span class="icon">&#128279;</span> Custom URL</strong>
+            <p>Build a shareable URL with your own preferred provider, fallbacks and minimum icon size. The settings are encoded in the URL &mdash; no account needed.</p>
+          </div>
+          <button type="button" class="bookmarklet-btn tool-action" id="profile-builder-btn" onclick="openProfileModal()">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/><path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/></svg>
+            Build custom URL
+          </button>
+        </div>
       </div>
     </aside>
   </div>
@@ -1959,6 +2057,58 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="profile-modal" hidden aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+      <div class="modal-header">
+        <h2 id="profile-modal-title">Build custom URL</h2>
+        <button type="button" class="modal-close" onclick="closeProfileModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Pick a preferred provider, optional fallbacks and a minimum icon size. The URL below encodes your choices &mdash; use it as <code>&lt;url&gt;/{domain-or-appname}</code>.</p>
+
+        <div class="profile-form">
+          <div class="profile-field">
+            <label for="profile-preferred">Preferred provider</label>
+            <select id="profile-preferred"></select>
+          </div>
+
+          <div class="profile-field">
+            <label>Fallbacks (optional, in order)</label>
+            <div class="profile-fallbacks">
+              <select id="profile-fallback-1" aria-label="Fallback 1"></select>
+              <select id="profile-fallback-2" aria-label="Fallback 2"></select>
+              <select id="profile-fallback-3" aria-label="Fallback 3"></select>
+              <select id="profile-fallback-4" aria-label="Fallback 4"></select>
+            </div>
+          </div>
+
+          <div class="profile-field">
+            <label for="profile-size">Minimum icon size</label>
+            <select id="profile-size"></select>
+            <span class="profile-hint">SVG = unlimited (vector, served as-is). PNG = served at exactly this size; sources smaller than this are skipped.</span>
+          </div>
+
+          <div class="profile-field">
+            <label for="profile-test">Preview with a domain or app name (optional)</label>
+            <input type="text" id="profile-test" placeholder="example.com  or  immich" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="search-url-box">
+          <code id="profile-url"></code>
+          <button type="button" class="modal-copy-btn" onclick="copyProfileUrl()">Copy URL</button>
+        </div>
+
+        <div class="profile-preview" id="profile-preview" style="display:none">
+          <span class="profile-preview-thumb">
+            <img id="profile-preview-img" alt="Custom favicon preview">
+          </span>
+          <span class="profile-preview-meta" id="profile-preview-meta"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="global-toast" id="global-toast" role="status" aria-live="polite">
     <span class="check">&#10003;</span>
     <span class="toast-text">URL copied</span>
@@ -2004,6 +2154,173 @@
       if (!toolsOpen) document.body.style.overflow = '';
       modal.removeEventListener('click', onSearchModalBackdropClick);
       document.removeEventListener('keydown', onSearchModalKeydown);
+    }
+
+    // --- Custom profile URL builder -------------------------------------
+    // Keep this encode contract identical to decodeProfile in
+    // src/customProfile.js: base64url of [version, preferred, [fallbacks], size].
+    const PROFILE_PROVIDER_OPTIONS = [
+      { value: 'scraper', label: 'HTML scraper' },
+      { value: 'google', label: 'Google' },
+      { value: 'googlev2', label: 'Google v2' },
+      { value: 'duckduckgo', label: 'DuckDuckGo' },
+      { value: 'yandex', label: 'Yandex' },
+      { value: 'faviconso', label: 'Favicon.so' },
+      { value: 'vemetric', label: 'Vemetric' },
+      { value: 'favicondev', label: 'Favicon Extractor' },
+      { value: 'faviconkit', label: 'Faviconkit' },
+      { value: 'faviconrun', label: 'favicon.run' },
+      { value: 'logodev', label: 'logo.dev', needs: 'logoDev' },
+      { value: 'brandfetch', label: 'Brandfetch', needs: 'brandfetch' },
+      { value: 'selfhst', label: 'selfh.st icons' },
+      { value: 'dashboardicons', label: 'Dashboard Icons' },
+      { value: 'lobehub', label: 'LobeHub' },
+      { value: 'svgl', label: 'SVGL' },
+    ];
+    const PROFILE_SIZE_OPTIONS = [16, 32, 64, 128];
+    const PROFILE_DEFAULT_SIZE = 128;
+
+    let profileBuilderReady = false;
+    let profileCopyUrl = '';
+
+    function encodeProfileClient(preferred, fallbacks, size) {
+      const json = JSON.stringify([1, preferred, fallbacks, size]);
+      return btoa(unescape(encodeURIComponent(json)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    }
+
+    function profileOptionDisabled(opt) {
+      return opt.needs ? !providersConfig[opt.needs] : false;
+    }
+
+    function fillProfileSelect(select, { includeNone }) {
+      const frag = document.createDocumentFragment();
+      if (includeNone) {
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = '— none —';
+        frag.appendChild(none);
+      }
+      for (const opt of PROFILE_PROVIDER_OPTIONS) {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        const disabled = profileOptionDisabled(opt);
+        o.textContent = disabled ? `${opt.label} (not configured)` : opt.label;
+        o.disabled = disabled;
+        frag.appendChild(o);
+      }
+      select.appendChild(frag);
+    }
+
+    async function initProfileBuilder() {
+      if (profileBuilderReady) return;
+      await providersReady;
+
+      const preferred = document.getElementById('profile-preferred');
+      fillProfileSelect(preferred, { includeNone: false });
+      preferred.value = 'scraper';
+
+      for (let i = 1; i <= 4; i += 1) {
+        fillProfileSelect(document.getElementById(`profile-fallback-${i}`), { includeNone: true });
+      }
+
+      const sizeSelect = document.getElementById('profile-size');
+      const sizeFrag = document.createDocumentFragment();
+      for (const size of PROFILE_SIZE_OPTIONS) {
+        const o = document.createElement('option');
+        o.value = String(size);
+        o.textContent = `${size}px`;
+        sizeFrag.appendChild(o);
+      }
+      sizeSelect.appendChild(sizeFrag);
+      sizeSelect.value = String(PROFILE_DEFAULT_SIZE);
+
+      const inputs = [
+        preferred,
+        sizeSelect,
+        document.getElementById('profile-test'),
+        ...[1, 2, 3, 4].map((i) => document.getElementById(`profile-fallback-${i}`)),
+      ];
+      for (const el of inputs) {
+        el.addEventListener('input', updateProfileUrl);
+        el.addEventListener('change', updateProfileUrl);
+      }
+
+      profileBuilderReady = true;
+      updateProfileUrl();
+    }
+
+    function updateProfileUrl() {
+      const preferred = document.getElementById('profile-preferred').value || 'scraper';
+      const fallbacks = [1, 2, 3, 4]
+        .map((i) => document.getElementById(`profile-fallback-${i}`).value)
+        .filter(Boolean);
+      const size = parseInt(document.getElementById('profile-size').value, 10) || PROFILE_DEFAULT_SIZE;
+
+      const id = encodeProfileClient(preferred, fallbacks, size);
+      const base = `${location.origin}/${id}/`;
+      profileCopyUrl = base;
+
+      const test = document.getElementById('profile-test').value.trim();
+      const urlEl = document.getElementById('profile-url');
+      const preview = document.getElementById('profile-preview');
+      const previewImg = document.getElementById('profile-preview-img');
+      const previewMeta = document.getElementById('profile-preview-meta');
+
+      if (test) {
+        const full = base + encodeURIComponent(test);
+        urlEl.textContent = full;
+        profileCopyUrl = full;
+        previewImg.src = full;
+        previewMeta.textContent = full;
+        preview.style.display = '';
+      } else {
+        urlEl.textContent = `${base}{domain-or-appname}`;
+        preview.style.display = 'none';
+        previewImg.removeAttribute('src');
+      }
+    }
+
+    async function copyProfileUrl() {
+      if (!profileCopyUrl) return;
+      try {
+        await navigator.clipboard.writeText(profileCopyUrl);
+        showGlobalToast(profileCopyUrl);
+      } catch {}
+    }
+
+    function openProfileModal() {
+      closeToolsOffcanvas();
+      const modal = document.getElementById('profile-modal');
+      if (!modal) return;
+      initProfileBuilder();
+      modal.hidden = false;
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      modal.addEventListener('click', onProfileModalBackdropClick);
+      document.addEventListener('keydown', onProfileModalKeydown);
+    }
+
+    function closeProfileModal() {
+      const modal = document.getElementById('profile-modal');
+      if (!modal) return;
+      modal.hidden = true;
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      modal.removeEventListener('click', onProfileModalBackdropClick);
+      document.removeEventListener('keydown', onProfileModalKeydown);
+    }
+
+    function onProfileModalBackdropClick(e) {
+      if (e.target.id === 'profile-modal') closeProfileModal();
+    }
+
+    function onProfileModalKeydown(e) {
+      if (e.key === 'Escape') closeProfileModal();
     }
 
     function openToolsOffcanvas() {
