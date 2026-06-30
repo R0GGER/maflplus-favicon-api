@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] — 2026-06-30
+
+### Changed
+
+- **Styled tooltips site-wide** — all native browser tooltips are replaced by a Bootstrap-style CSS tooltip (`data-tip`), giving a consistent dark, rounded look with a pointer arrow and fade-in. Long URLs wrap inside the tooltip, and an optional top placement (`data-tip-pos="top"`) keeps the bookmarklet tip from being clipped in the scrollable Tools panel. Accessible names are preserved via `aria-label`.
+
+### Removed
+
+- **Download-icon tooltip** — the per-card **Download icon** button no longer shows a tooltip (the `aria-label` is kept for screen readers).
+
 ## [2.7.2] — 2026-06-30
 
 ### Changed
