@@ -321,11 +321,11 @@ function parseDomainOrService(raw) {
 // /{provider}/{size}/{ext}/{slug}[?variant=] scheme. `sizes` lists the offered set,
 // `defaultSize` is used for the top-level + variant proxy URLs. `variant`
 // stays a query parameter because it is a separate dimension from size/format.
-function buildCatalogBlock(host, routeName, slug, sourceFn, availability, sizes, defaultSize) {
+function buildCatalogBlock(host, routeName, slug, sourceFn, availability, sizes, defaultSize, defaultFormat = 'png') {
   if (!slug || !availability || !availability.color) return null;
 
   const encoded = encodeURIComponent(slug);
-  const proxyFor = (size, variant, format = 'png') => {
+  const proxyFor = (size, variant, format = defaultFormat) => {
     const pathSize = catalogProxyPathSize(size, format);
     const base = `${host}/${routeName}/${pathSize}/${format}/${encoded}`;
     return variant && variant !== 'color' ? `${base}?variant=${variant}` : base;
@@ -335,8 +335,8 @@ function buildCatalogBlock(host, routeName, slug, sourceFn, availability, sizes,
   for (const variant of ['color', 'light', 'dark']) {
     if (availability[variant]) {
       variants[variant] = {
-        proxy: proxyFor(defaultSize, variant, 'png'),
-        source: sourceFn(slug, variant, 'png'),
+        proxy: proxyFor(defaultSize, variant, defaultFormat),
+        source: sourceFn(slug, variant, defaultFormat),
         svg: {
           proxy: proxyFor(defaultSize, variant, 'svg'),
           source: sourceFn(slug, variant, 'svg'),
@@ -352,17 +352,27 @@ function buildCatalogBlock(host, routeName, slug, sourceFn, availability, sizes,
     ])
   );
 
-  return {
+  const block = {
     service: slug,
-    proxy: proxyFor(defaultSize, 'color', 'png'),
-    source: sourceFn(slug, 'color', 'png'),
-    svg: {
-      proxy: proxyFor(defaultSize, 'color', 'svg'),
-      source: sourceFn(slug, 'color', 'svg'),
-    },
+    proxy: proxyFor(defaultSize, 'color', defaultFormat),
+    source: sourceFn(slug, 'color', defaultFormat),
     sizes: sizesMap,
     variants,
   };
+
+  if (defaultFormat === 'svg') {
+    block.png = {
+      proxy: proxyFor(defaultSize, 'color', 'png'),
+      source: sourceFn(slug, 'color', 'png'),
+    };
+  } else {
+    block.svg = {
+      proxy: proxyFor(defaultSize, 'color', 'svg'),
+      source: sourceFn(slug, 'color', 'svg'),
+    };
+  }
+
+  return block;
 }
 
 function parseCatalogFormat(raw) {
@@ -525,7 +535,8 @@ async function buildServiceCatalogEndpoints(
     PROVIDERS.svgl,
     svglAvailability,
     SVGL_SIZES_ARRAY,
-    DEFAULT_SVGL_SIZE
+    DEFAULT_SVGL_SIZE,
+    'svg'
   );
   const svgl = svglBlock ? { ...svglBlock, query } : emptyCatalogProvider();
 

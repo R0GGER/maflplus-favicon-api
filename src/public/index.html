@@ -2042,6 +2042,10 @@
           <span class="unavailable" id="svgl-unavailable" style="display:none">variant not available</span>
           <span class="copied-toast">URL copied!</span>
         </div>
+        <div class="size-buttons btn-group" id="svgl-format" role="group" aria-label="Extension">
+          <button class="size-btn" data-format="png" type="button" onclick="switchSvglFormat('png')">PNG</button>
+          <button class="size-btn active" data-format="svg" type="button" onclick="switchSvglFormat('svg')">SVG</button>
+        </div>
         <div class="size-buttons btn-group" id="svgl-variants" role="group" aria-label="Color">
           <button class="size-btn active" data-variant="color" onclick="switchSvglVariant('color')">Color</button>
           <button class="size-btn" data-variant="light" style="display:none" onclick="switchSvglVariant('light')">Light</button>
@@ -2538,6 +2542,7 @@
     let currentLobehubSize = 128;
     let currentSvglSlug = '';
     let currentSvglVariant = 'color';
+    let currentSvglFormat = 'svg';
     let svglProbeSeq = 0;
     let currentSvglSize = 128;
     const svglCatalogCache = new Map();
@@ -2966,6 +2971,7 @@
       currentLobehubSize = 128;
       currentSvglSlug = '';
       currentSvglVariant = 'color';
+      currentSvglFormat = 'svg';
       currentSvglSize = 128;
       currentScraperSelection = 0;
       currentScraperProxySize = 128;
@@ -3013,6 +3019,8 @@
       resetDashboardIconsFormatControls();
       resetLobehubVariantButtons();
       resetLobehubFormatControls();
+      resetSvglVariantButtons();
+      resetSvglFormatControls();
       updateResetButton();
     }
 
@@ -3335,8 +3343,10 @@
       if (providerHasMatches(svglData)) {
         currentSvglSlug = svglData.resolved || searchQuery;
         currentSvglVariant = 'color';
+        currentSvglFormat = 'svg';
         currentSvglSize = 128;
         resetSvglVariantButtons();
+        resetSvglFormatControls();
         setActiveVariant('svgl-variants', 'color');
         setActiveSize('svgl-sizes', 128);
         loadSvgl(searchQuery, 'color', { hideOnError, activeSlug: currentSvglSlug });
@@ -4218,7 +4228,7 @@
       );
     }
 
-    function svglProxyPath(slug, variant, size = currentSvglSize, format = 'png') {
+    function svglProxyPath(slug, variant, format = currentSvglFormat, size = currentSvglSize) {
       return buildCatalogProxyPath('svgl', slug, { variant, format, size });
     }
 
@@ -4249,8 +4259,9 @@
     async function loadSvgl(slug, variant, opts) {
       const hideOnError = !!(opts && opts.hideOnError);
       const activeSlug = (opts && opts.activeSlug) || slug;
+      const format = (opts && opts.format) || currentSvglFormat;
       const size = (opts && opts.size) || currentSvglSize;
-      const proxyUrl = svglProxyPath(slug, variant, size);
+      const proxyUrl = svglProxyPath(activeSlug, variant, format, size);
       const catalogPromise = fetchSvglCatalog(activeSlug);
 
       const img = document.getElementById('svgl-img');
@@ -4274,24 +4285,40 @@
       const imgEl = new Image();
       imgEl.crossOrigin = 'anonymous';
       imgEl.onload = async () => {
-        if (currentSvglSlug !== activeSlug || currentSvglVariant !== variant || currentSvglSize !== size) return;
+        if (
+          currentSvglSlug !== activeSlug
+          || currentSvglVariant !== variant
+          || currentSvglFormat !== format
+          || (format === 'png' && currentSvglSize !== size)
+        ) return;
         img.src = imgEl.src;
         img.style.display = 'block';
         spinner.style.display = 'none';
 
         const catalog = await catalogPromise;
-        if (currentSvglSlug !== activeSlug || currentSvglVariant !== variant || currentSvglSize !== size) return;
+        if (
+          currentSvglSlug !== activeSlug
+          || currentSvglVariant !== variant
+          || currentSvglFormat !== format
+          || (format === 'png' && currentSvglSize !== size)
+        ) return;
         const sourceUrl = svglSourceFromCatalog(catalog, variant);
         writeCardMeta(meta, display, {
           w: imgEl.naturalWidth,
           h: imgEl.naturalHeight,
           proxyUrl,
           sourceUrl: sourceUrl || null,
+          hideDimensions: format === 'svg',
         });
         updateServiceIconsDivider();
       };
       imgEl.onerror = () => {
-        if (currentSvglSlug !== activeSlug || currentSvglVariant !== variant || currentSvglSize !== size) return;
+        if (
+          currentSvglSlug !== activeSlug
+          || currentSvglVariant !== variant
+          || currentSvglFormat !== format
+          || (format === 'png' && currentSvglSize !== size)
+        ) return;
         spinner.style.display = 'none';
         if (hideOnError || variant === 'color') {
           card.style.display = 'none';
@@ -4312,11 +4339,24 @@
       loadSvgl(currentSvglSlug, variant, { hideOnError: variant === 'color', size: currentSvglSize });
     }
 
-    function switchSvglSize(size) {
+    function switchSvglFormat(format) {
       if (!currentSvglSlug) return;
+      currentSvglFormat = format;
+      setActiveFormat('svgl-format', format);
+      updateCatalogFormatControls('svgl', format);
+      loadSvgl(currentSvglSlug, currentSvglVariant, { hideOnError: false, format });
+    }
+
+    function switchSvglSize(size) {
+      if (!currentSvglSlug || currentSvglFormat !== 'png') return;
       currentSvglSize = size;
       setActiveSize('svgl-sizes', size);
       loadSvgl(currentSvglSlug, currentSvglVariant, { hideOnError: false, size });
+    }
+
+    function resetSvglFormatControls() {
+      setActiveFormat('svgl-format', 'svg');
+      updateCatalogFormatControls('svgl', 'svg');
     }
 
     function resetSvglVariantButtons() {
@@ -4330,7 +4370,7 @@
         const img = new Image();
         img.onload = () => resolve(true);
         img.onerror = () => resolve(false);
-        img.src = `${svglProxyPath(slug, variant, 128)}?probe=${Date.now()}`;
+        img.src = `${svglProxyPath(slug, variant, 'png', 128)}?probe=${Date.now()}`;
       });
     }
 
