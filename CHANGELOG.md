@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.4] — 2026-07-02
+
+### Changed
+
+- **SVGL — SVG as default** — SVGL upstream assets are native SVG; the Web UI now defaults to SVG (`/svgl/0/svg/{service}`) instead of rasterizing to PNG. A **PNG | SVG** toggle is added to the SVGL card (size buttons hide when SVG is selected), matching selfh.st, dashboardicons.com, and LobeHub. JSON discovery (`/{service}/json`) lists SVG as the primary `proxy` for SVGL, with a top-level `png` entry for raster URLs.
+
 ## [2.7.3] — 2026-06-30
 
 ### Changed
